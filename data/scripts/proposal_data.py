@@ -25,22 +25,12 @@ def load_data():
 
     return proposal_df
 
-def load_api_data(api_data_client, extracted_release_ids):
-    api_data_columns = [column.name for column in api_data_client.columns if column.name != 'id']
-    api_data = api_data_client.get_entries()
+def load_api_data(api_data_client=None):
+    if not api_data_client:
+        api_data_client = APIDataClient()
+    
 
-    api_data_dict = {column: [] for column in api_data_columns}
-
-    convert_list_to_string = lambda x: str(pickle.loads(x))[1:-1]
-    for data in tqdm(api_data):
-        if data['release_id'] in extracted_release_ids:
-            for column in api_data_columns:
-                if type(data[column]) == bytes:
-                    api_data_dict[column].append(convert_list_to_string(data[column]))     
-                    continue
-                api_data_dict[column].append(data[column])            
-
-    api_data_df = pd.DataFrame(api_data_dict).drop_duplicates('release_id')
+    api_data_df = pd.read_sql('api_data',api_data_client.engine)
 
     return api_data_df
     
