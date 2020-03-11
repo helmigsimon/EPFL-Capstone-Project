@@ -1,13 +1,15 @@
-from data.util.db import ExtractedDataClient, HighLevelFeatureClient, APIDataClient
+from util.db import ExtractedDataClient, HighLevelFeatureClient, APIDataClient
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
 import pickle
 import os  
-from data.util.paths import DATA_PATH
+from util.paths import DATA_PATH
 
-def load_data():
+def load_proposal_data():
     extracted_data_client, high_level_feature_client, api_data_client = ExtractedDataClient(), HighLevelFeatureClient(), APIDataClient()
+
+    standards = load_standards()
     
     extracted_data_df = load_extracted_data(extracted_data_client)
 
@@ -25,21 +27,45 @@ def load_data():
 
     return proposal_df
 
-def load_api_data(api_data_client=None):
-    if not api_data_client:
-        api_data_client = APIDataClient()
-    
+def load_api_data(api_data_client, extracted_release_ids):
+    api_data_columns = [column.name for column in api_data_client.columns if column.name != 'id']
+    api_data = api_data_client.get_entries()
 
-    api_data_df = pd.read_sql('api_data',api_data_client.engine)
+    api_data_dict = {column: [] for column in api_data_columns}
+
+    convert_list_to_string = lambda x: str(pickle.loads(x))[1:-1]
+    for data in tqdm(api_data):
+        if data['release_id'] in extracted_release_ids:
+            for column in api_data_columns:
+                if type(data[column]) == bytes:
+                    api_data_dict[column].append(convert_list_to_string(data[column]))     
+                    continue
+                api_data_dict[column].append(data[column])            
+
+    api_data_df = pd.DataFrame(api_data_dict).drop_duplicates('release_id')
 
     return api_data_df
     
 
 
-def load_high_level_features(high_level_feature_client=None):
-    if not high_level_feature_client:
-        high_level_feature_client = HighLevelFeatureClient()
-    high_level_feature_df = pd.read_sql('high_level_features',high_level_feature_client.engine)
+def load_high_level_features(high_level_feature_client,extracted_release_ids):
+    high_level_feature_columns = [column.name for column in high_level_feature_client.columns if column.name != 'id']
+    high_level_feature_dict = {column: [] for column in high_level_feature_columns}
+    
+    high_level_feature_generator = high_level_feature_client.get_entries()
+    #high_level_feature_generator = pd.read_sql_table("high_level_features",high_level_feature_client.engine,chunksize=20000)
+    #for chunk in tqdm(high_level_feature_generator):
+    #    filtered_chunk = chunk[chunk.release_id.isin(extracted_release_ids)]
+    #    high_level_feature_df = pd.concat([high_level_feature_df,filtered_chunk],axis=0)
+    
+    for data in tqdm(high_level_feature_generator):
+        if data['release_id'] in extracted_release_ids:
+            for x in high_level_feature_dict.keys():
+                high_level_feature_dict[x].append(data[x]) 
+
+
+    high_level_feature_df = pd.DataFrame(high_level_feature_dict)
+
 
     high_level_feature_df.reset_index(drop=True,inplace=True)
     high_level_feature_df = high_level_feature_df.astype({'release_id':np.int32,'bitmap':np.int32})
