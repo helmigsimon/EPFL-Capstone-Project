@@ -36,8 +36,8 @@ class DataLoader:
             assert type(client) == type(self.high_level_feature_client)
             high_level_feature_df = self._load_data_as_df(client)
         
-        high_level_feature_df.reset_index(drop=True,inplace=True)
-        high_level_feature_df = high_level_feature_df.astype({'release_id':np.int32,'bitmap':np.int32})
+        #high_level_feature_df.reset_index(drop=True,inplace=True)
+        #high_level_feature_df = high_level_feature_df.astype({'release_id':np.int32,'bitmap':np.int32})
 
         return high_level_feature_df
 

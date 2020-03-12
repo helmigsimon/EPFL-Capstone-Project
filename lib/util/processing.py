@@ -1,19 +1,35 @@
-import pandas as pd
+import re
 import requests
 from bs4 import BeautifulSoup
-import os
+import pandas as pd
 import numpy as np
-from copy import deepcopy
 import pdpipe as pdp
-import re
-from tqdm import tqdm
-from functools import lru_cache
 
-from data.util.environment_variables import GEOSCHEME_CODES, COUNTRY_CODES, EXCEPTIONS, REDIRECTIONS, SUPERREGIONS, REGIONS, COUNTRIES
-from data.scripts.project_data import DataLoader
+from data.util.environment_variables import GEOSCHEME_CODES, COUNTRY_CODES, EXCEPTIONS, REGIONS, SUPERREGIONS, REDIRECTIONS
 
 punctuation = re.compile(r"[^\s\w]")
 entity = re.compile(r"[\w\s]+")
+
+def get_geoscheme_table():
+    """
+    Downloads the UN Geoscheme Table from Wikipedia and scrapes the table
+    """
+    GEOSCHEME_WIKI_URL = 'https://en.wikipedia.org/wiki/List_of_countries_by_United_Nations_geoscheme'
+    
+    response = requests.get(GEOSCHEME_WIKI_URL)
+    soup = BeautifulSoup(response.text,features="html.parser")
+
+    rows = []
+    headers = ['country/region','capital','alpha-2','alpha-3','numeric','m49']
+
+    for tr in soup.find_all('tr')[2:]:
+        tds = tr.find_all('td')
+        rows.append({
+            header: entry.text for header, entry in zip(headers,tds)
+        })
+
+    return rows
+
 
 def evaluate_geoscheme_name(name, geoscheme_df):
     """
@@ -144,42 +160,15 @@ def get_country_region_superregion(geoscheme_df,name):
         'superregion': 'unknown'
     }
 
-def load_geoscheme_df():
+def make_conversion_pipe():
     """
-    Loads the UN Geoscheme DataFrame mapping countries to regions and superregions
+    Creates the Pandas Pipeline for the transformation of the UN Geoscheme DataFrame
     """
-    geoscheme_table = get_geoscheme_table()
-
-    geoscheme_df = pd.DataFrame(geoscheme_table)
-    
-    geoscheme_df = pd.concat([
-        geoscheme_df.loc[:,['country/region','numeric']],
-        geoscheme_df['m49'].str.split('<',expand=True)
-    ],axis=1)
-
-    conversion_pipe = make_conversion_pipe()
-
-    return conversion_pipe.apply(geoscheme_df)
-
-def get_geoscheme_table():
-    """
-    Downloads the UN Geoscheme Table from Wikipedia and scrapes the table
-    """
-    GEOSCHEME_WIKI_URL = 'https://en.wikipedia.org/wiki/List_of_countries_by_United_Nations_geoscheme'
-    
-    response = requests.get(GEOSCHEME_WIKI_URL)
-    soup = BeautifulSoup(response.text,features="html.parser")
-
-    rows = []
-    headers = ['country/region','capital','alpha-2','alpha-3','numeric','m49']
-
-    for tr in soup.find_all('tr')[2:]:
-        tds = tr.find_all('td')
-        rows.append({
-            header: entry.text for header, entry in zip(headers,tds)
-        })
-
-    return rows
+    pipeline = pdp.ColRename({i:str(i) for i in range(0,5)})
+    pipeline += pdp.ApplyByCols(['country/region','numeric','0','1','2','3','4'],func=replace_new_lines)
+    pipeline += pdp.ApplyByCols(['numeric','0','1','2','3','4'],func=clean_out_world)
+    pipeline += pdp.DropNa(axis=1,how='all')
+    return pipeline
 
 def clean_out_world(x):
     """
@@ -199,63 +188,3 @@ def replace_new_lines(x):
     if type(x) != str:
         return x
     return x.replace('\n','')
-
-def make_conversion_pipe():
-    """
-    Creates the Pandas Pipeline for the transformation of the UN Geoscheme DataFrame
-    """
-    pipeline = pdp.ColRename({i:str(i) for i in range(0,5)})
-    pipeline += pdp.ApplyByCols(['country/region','numeric','0','1','2','3','4'],func=replace_new_lines)
-    pipeline += pdp.ApplyByCols(['numeric','0','1','2','3','4'],func=clean_out_world)
-    pipeline += pdp.DropNa(axis=1,how='all')
-    return pipeline
-
-
-def get_country_to_dict_mapping(api_data=None):
-    if not api_data:
-        data_loader = DataLoader()
-        api_data = data_loader.load_api_data()
-
-    unique_countries = api_data['country'].unique()
-
-    geoscheme_df = load_geoscheme_df()
-
-    country_to_dict_mapping = {i: get_country_region_superregion(geoscheme_df, i) for i in unique_countries}
-
-
-    return country_to_dict_mapping
-
-def encode_country_column(country_column: pd.Series):
-    country_column = country_column.copy()
-    country_one_hot = pd.get_dummies(pd.DataFrame(country_column.to_dict()).T.applymap(lambda x: str(x) if type(x) == list else x))
-
-    mistakes = list(filter(lambda x: "_[" in x if x else x,country_one_hot.columns))
-
-    def correct_mistaken_one_hot_encodings(df,mistakes):
-        correct_names = set(COUNTRIES + REGIONS + SUPERREGIONS)
-        df = df.copy()
-        entity = re.compile(r"\'(.+?)\'")
-        for mistake in tqdm(mistakes):
-            mistaken_indices = df[df[mistake]==1].index
-            category, mistaken_regions = mistake.split('_')
-            regions = entity.findall(mistaken_regions)
-            for region in regions:
-                if region not in correct_names:
-                    region = entity.findall(region)
-                sub_column = ''.join([category,'_',region])
-                df.loc[mistaken_indices,sub_column] = 1
-        df.fillna(int(0),inplace=True)
-        df.drop(mistakes,axis=1,inplace=True)
-        return df
-
-    
-    country_one_hot = correct_mistaken_one_hot_encodings(country_one_hot,mistakes)
-
-    #Dropping one entry to avoid full dummy variable coverage
-    country_one_hot.drop(['superregion_unknown','region_unknown','country_unknown'],inplace=True,axis=1)
-
-    #Converting all indicator feature values to integers
-    country_one_hot.astype(np.int32)
-    
-    return country_one_hot
-
