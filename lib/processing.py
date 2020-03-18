@@ -2,7 +2,10 @@ import os
 import re
 import requests
 import pandas as pd
+from string import punctuation
 import numpy as np
+from nltk.corpus import stopwords
+import nltk
 
 from bs4 import BeautifulSoup
 from tqdm import tqdm
@@ -11,6 +14,59 @@ from data.util.environment_variables import SUPERREGIONS, REGIONS, COUNTRIES
 from data.scripts.project_data import DataLoader
 from lib.util.processing import entity, get_country_region_superregion, get_geoscheme_table, make_conversion_pipe
 
+paren_num = re.compile(r"[(\d+)]+")
+spaces = re.compile(r"\s+")
+
+ARTIST_SPLIT_PUNCTUATION = ['/', '|', '','&', ',','-','.','*']
+ARTIST_REMOVAL_PUNCTUATION_SET = set(punctuation) - set(ARTIST_SPLIT_PUNCTUATION)
+SPLITWORDS = set(['feat', 'and', 'with','featuring','presents','vs','starring'])
+STOPWORDS = set(stopwords.words('english'))
+STOPWORDS.update(set(["'s"]))
+
+UNNECESSARY_ARTIST_WORDS = set(['special','guest','orchestra','quartet','ensemble','band','trio','quintet'])
+ARTIST_REMOVAL_WORDS = STOPWORDS.union(UNNECESSARY_ARTIST_WORDS,SPLITWORDS)
+
+UNNECESSARY_LABEL_WORDS = set([
+    'com',
+    'records',
+    'recordings',
+    'compositions',
+    'ltd',
+    'mastering',
+    'studio',
+    'studios',
+    'productions',
+    'music',
+    'pub',
+    'co',
+    'soundtracks',
+    'series',
+    'ag',
+    'ab',
+    'inc',
+    'ltda',
+    'llc',
+    'company',
+    'com',
+    'corp',
+    'enterprises',
+    'label',
+    'recording',
+    'communications',
+    'produktion',
+    'not',
+    'on',
+    'self',
+    'released',
+    'audio',
+    'production',
+    'distribution',
+    'plc',
+    'pressings',
+    'collection',
+    'entertainment'
+])
+LABEL_REMOVAL_WORDS = STOPWORDS.union(UNNECESSARY_LABEL_WORDS)
 
 def load_geoscheme_df():
     """
@@ -79,55 +135,51 @@ def encode_country_column(country_column: pd.Series):
 
 def encode_genre_column(genre_column: pd.Series):
     genre_column = genre_column.copy()
-    df = pd.get_dummies(genre_column.apply(lambda x: str(x).strip('[]').replace("'","") if type(x) == list else x))
-
     unique_genres = get_genres(genre_column)
+    df = pd.get_dummies(pd.DataFrame({genre: np.zeros(len(genre_column)) for genre in unique_genres}))
 
-    for genre in unique_genres:
-        df[genre] = 0
+    def encode_styles(row):
+        idx = row.name
+        if idx % 30000 == 0:
+            print(idx)
+        for list_ in row:
+            try:
+                df[list_][idx] = 1
+            except KeyError:
+                df[[element.replace("'","") for element in list_]][idx] = 1
 
-    entity = re.compile(r"\'(.+?)\'")
-
-    agg_columns = set(df.columns)-unique_genres
-    for genre in tqdm(agg_columns):
-        genre_indices = df[df[genre]==1].index
-        sub_genres = entity.findall(genre)
-        for sub_genre in sub_genres:
-            if sub_genre not in unique_genres:
-                raise Exception
-            df.loc[genre_indices,sub_genre] = 1
+    pd.DataFrame(genre_column).progress_apply(encode_styles,axis=1)
     
-    df.fillna(int(0),inplace=True)
-    df.drop(agg_columns,axis=1,inplace=True)
 
     return df
 
+
 def encode_style_column(style_column: pd.Series):
     style_column = style_column.copy()
-    df = pd.get_dummies(style_column.apply(lambda x: str(x).strip('[]').replace("'","") if type(x) == list else x))
 
     unique_styles = get_styles(style_column)
 
-    for style in unique_styles:
-        df[style] = 0
+    df = pd.DataFrame({style: np.zeros(len(style_column)) for style in unique_styles})
 
     entity = re.compile(r"\'(.+?)\'")
 
-    # Can this be vectorized?
-
-    agg_columns = set(df.columns)-unique_styles
-    for style in tqdm(agg_columns):
-        style_indices = df[df[style]==1].index
-        sub_styles = entity.findall(style)
-        for sub_style in sub_styles:
-            if sub_style not in unique_styles:
-                raise Exception
-            df.loc[style_indices,sub_style] = 1
-    df.fillna(0,inplace=True)
-    df.drop(agg_columns,axis=1,inplace=True)
+    def encode_styles(row):
+        idx = row.name
+        if idx % 30000 == 0:
+            print(idx)
+        for element in row:
+            try:
+                df[element][idx] = 1
+            except KeyError as e:
+                print(row)
+                print(element)
+                print(idx)
+                print(e)
+                raise
+    style_column = pd.DataFrame(style_column).progress_apply(encode_styles,axis=1)
 
     df = df.astype(np.int32)
-
+    
     return df
 
 def get_genres(genre_column: pd.Series):
@@ -150,3 +202,60 @@ def get_unique_values_from_column_with_list_dtype(column):
 def get_styles(style_column: pd.Series):
     return get_unique_values_from_column_with_list_dtype(style_column)
 
+def clean_label_column(label_entries):
+    label_entry = label_entries[0]
+
+    label_entry = label_entry.lower()
+
+    label_entry = remove_words(label_entry,LABEL_REMOVAL_WORDS)
+
+    label_entry = remove_paren_num(label_entry)
+
+    label_entry = remove_punctuation(label_entry)
+    
+    label_entry = remove_excess_spaces(label_entry)
+
+    return label_entry
+
+
+
+
+def clean_artist_column(artist_entry):
+    artist_entry = artist_entry.lower()
+
+    artist_entry = remove_words(artist_entry,ARTIST_REMOVAL_WORDS)
+
+    artist_entry = remove_paren_num(artist_entry)
+
+    artist_entry = remove_punctuation(artist_entry)
+
+    artist_entry = remove_excess_spaces(artist_entry)
+
+    #artist_entry = remove_leading_comma_space(artist_entry)
+    
+    return artist_entry
+
+def remove_punctuation(artist_entry):
+    return ''.join(char for char in artist_entry if char not in punctuation)
+
+def remove_words(entry,words):
+    return ' '.join(word for word in nltk.word_tokenize(entry) if word not in words)
+
+def remove_unnecessary_words(artist_entry):
+    return artist_entry.replace('& orchestra','').replace('and orchestra','').replace('special guest','')
+
+def remove_paren_num(artist_entry):
+    return paren_num.sub('',artist_entry)
+
+def remove_excess_spaces(artist_entry):
+    return spaces.sub(' ',artist_entry)
+
+def remove_leading_comma_space(artist_entry):
+    return artist_entry.replace(' ,',',')
+
+
+def splitting_artist_column():
+    split_encoded_artist = encoded_artist.str.split(r"/|,|\*|vs| and |&|featuring|presents|feat|starring|with| -|\|| . |•",expand=True) 
+    unique_artists = set()
+    for column in split_encoded_artist.columns:
+        unique_artists = unique_artists.union(set(split_encoded_artist[column].apply(lambda x: x.strip(' ') if x else x)))
