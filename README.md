@@ -1,2 +1,2 @@
-# CapstoneDraft
-Draft of the EPFL Capstone Project
+# EPFL Applied Data Science : Machine Learning Capstone Project
+
