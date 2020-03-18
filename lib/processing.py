@@ -6,6 +6,7 @@ from string import punctuation
 import numpy as np
 from nltk.corpus import stopwords
 import nltk
+from functools import lru_cache
 
 from bs4 import BeautifulSoup
 from tqdm import tqdm
@@ -235,6 +236,7 @@ def clean_artist_column(artist_entry):
     
     return artist_entry
 
+
 def remove_punctuation(artist_entry):
     return ''.join(char for char in artist_entry if char not in punctuation)
 
@@ -259,3 +261,37 @@ def splitting_artist_column():
     unique_artists = set()
     for column in split_encoded_artist.columns:
         unique_artists = unique_artists.union(set(split_encoded_artist[column].apply(lambda x: x.strip(' ') if x else x)))
+
+def encode_formats(df):
+    df = df.copy()
+
+    for index, format_list in tqdm(enumerate(df.loc[:,'formats'])):
+        format_dictionary = format_list[0]
+        for key, value in format_dictionary.items():
+            try:
+                df.loc[index,key] = value
+            except ValueError:
+                df.loc[index,key] = 'üü'.join(value)
+    return df
+
+def make_format_description_column(format_list):
+    return format_list[0].get('descriptions')
+
+def expand_format_description_column(column):
+    return pd.Series(column).rename(columns = lambda x: 'descriptions_' + str(x))
+
+def make_format_name_column(format_list):
+    return format_list[0].get('name')
+
+def make_format_quantity_column(format_list):
+    return int(format_list[0].get('qty'))
+
+def make_format_text_column(format_list):
+    return format_list[0].get('text')
+
+
+
+
+
+def convert_last_sold_encoding(last_sold):
+    pass
