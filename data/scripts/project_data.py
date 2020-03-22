@@ -12,32 +12,19 @@ class DataLoader:
         self.high_level_feature_client = HighLevelFeatureClient()
         self.extracted_data_client = ExtractedDataClient()
 
-    def _load_data_as_df(self,client):
-        return pd.read_sql(client.name,client.engine)
+    def _load_data_as_df(self,client,**kwargs):
+        return pd.read_sql(client.name,client.engine,**kwargs)
 
     def load_api_data(self,client=None):
-        if not client:
-            return self._load_data_as_df(self.api_data_client)
-        
-        assert type(client) == type(self.api_data_client)
-        return self._load_data_as_df(client)
+        return self._load_data_as_df(self.api_data_client)
     
-    def load_extracted_data(self,client=None):
-        if not client:
-            return self._load_data_as_df(self.extracted_data_client)
-        
-        assert type(client) == type(self.extracted_data_client)
-        return self._load_data_as_df(client)
+    def load_extracted_data(self,):
+        return self._load_data_as_df(self.extracted_data_client)
 
-    def load_high_level_features(self,client=None):
-        if not client:
-            high_level_feature_df = self._load_data_as_df(self.high_level_feature_client)
-        else:
-            assert type(client) == type(self.high_level_feature_client)
-            high_level_feature_df = self._load_data_as_df(client)
+    def load_high_level_features(self,):
+        high_level_feature_df = self._load_data_as_df(self.high_level_feature_client,chunksize=10000)
+
         
-        #high_level_feature_df.reset_index(drop=True,inplace=True)
-        #high_level_feature_df = high_level_feature_df.astype({'release_id':np.int32,'bitmap':np.int32})
 
         return high_level_feature_df
 
