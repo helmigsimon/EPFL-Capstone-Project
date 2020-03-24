@@ -90,6 +90,17 @@ def load_geoscheme_df():
 
     return conversion_pipe.apply(geoscheme_df)
 
+def make_market_value_col(median_col,market_price_col):
+    median_col, market_price_col = median_col.copy(), market_price_col.copy()
+    
+    market_value_col = median_col
+    
+    market_value_null_idx = market_value_col[market_value_col.isnull()].index
+    
+    market_value_col[market_value_null_idx] = market_price_col[market_value_null_idx]
+    
+    return market_value_col
+
 def get_country_to_dict_mapping(api_data=None):
     if not api_data:
         data_loader = DataLoader()
@@ -145,18 +156,18 @@ def encode_genre_column(genre_column: pd.Series):
 
     def encode_styles(row):
         idx = row.name
-        if idx % 30000 == 0:
-            print(idx)
         for list_ in row:
             try:
-                df[list_][idx] = 1
+                df.loc[idx,list_] = 1
             except KeyError:
-                df[[element.replace("'","") for element in list_]][idx] = 1
+                df.loc[idx,[element.replace("'","") for element in list_]] = 1
 
     pd.DataFrame(genre_column).progress_apply(encode_styles,axis=1)
     
+    df = df.astype(np.uint8)
+    df.rename(columns={column:'genre_{}'.format(column) for column in df.columns},inplace=True)
 
-    return df.astype(np.uint8)
+    return df
 
 
 def encode_style_column(style_column: pd.Series):
@@ -170,11 +181,9 @@ def encode_style_column(style_column: pd.Series):
 
     def encode_styles(row):
         idx = row.name
-        if idx % 30000 == 0:
-            print(idx)
         for element in row:
             try:
-                df[element][idx] = 1
+                df.loc[idx,element] = 1
             except KeyError as e:
                 print(row)
                 print(element)
@@ -184,6 +193,7 @@ def encode_style_column(style_column: pd.Series):
     style_column = pd.DataFrame(style_column).progress_apply(encode_styles,axis=1)
 
     df = df.astype(np.uint8)
+    df.rename(columns={column:'style_{}'.format(column) for column in df.columns},inplace=True)
     
     return df
 
