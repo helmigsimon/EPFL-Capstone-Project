@@ -164,9 +164,10 @@ def encode_genre_column(genre_column: pd.Series):
 
     pd.DataFrame(genre_column).progress_apply(encode_styles,axis=1)
     
-    df = df.astype(np.uint8)
-    df.rename(columns={column:'genre_{}'.format(column) for column in df.columns},inplace=True)
 
+    df = df.astype(np.uint8)
+    df.drop('Jazz',axis=1,inplace=True)
+    df.rename(columns={column:'genre_{}'.format(column) for column in df.columns},inplace=True)
     return df
 
 
@@ -450,7 +451,8 @@ def expand_format_description_column(df):
     df_new_columns = set(df.columns) - df_old_columns
 
     format_df = df[df_new_columns].fillna(value=0).astype(np.uint8)
-
+    #All entries are albums by default
+    format_df.drop('Album',axis=1,inplace=True)
     format_df.rename(columns={column: 'format_description_{}'.format(column) for column in format_df.columns},inplace=True)
 
     return format_df
