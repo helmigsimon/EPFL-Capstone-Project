@@ -3,8 +3,10 @@ import sqlalchemy as db
 from data.util.paths import DATA_PATH
 import pandas as pd
 
+DIALECT = 'sqlite'
+
 class SQLClient():
-    def __init__(self,name: str,path: str,dialect: str='sqlite'):
+    def __init__(self,name: str,path: str,dialect: str=DIALECT):
         self.name = name
         self.path = path
         self.dialect = dialect

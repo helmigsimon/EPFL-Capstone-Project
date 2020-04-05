@@ -10,7 +10,7 @@ from nltk.corpus import stopwords
 import nltk
 from functools import lru_cache
 from scipy.sparse import csr_matrix
-#import sparse_dot_topn.sparse_dot_topn as ct
+import sparse_dot_topn.sparse_dot_topn as ct
 
 
 from sklearn.feature_extraction.text import TfidfVectorizer
