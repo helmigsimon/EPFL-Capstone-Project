@@ -10,7 +10,8 @@ from nltk.corpus import stopwords
 import nltk
 from functools import lru_cache
 from scipy.sparse import csr_matrix
-import sparse_dot_topn.sparse_dot_topn as ct
+#import sparse_dot_topn.sparse_dot_topn as ct
+from sklearn.base import BaseEstimator, TransformerMixin
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from bs4 import BeautifulSoup
@@ -101,19 +102,49 @@ def make_market_value_col(median_col,market_price_col):
     
     return market_value_col
 
-def get_country_to_dict_mapping(api_data=None):
-    if not api_data:
-        data_loader = DataLoader()
-        api_data = data_loader.load_api_data()
 
-    unique_countries = api_data['country'].unique()
+class CountryEncoder(BaseEstimator, TransformerMixin):
+    def __init__(self,column, geoscheme_df=None):
+        self.column = column
+        self.geoscheme_df = geoscheme_df if geoscheme_df else load_geoscheme_df()
 
-    geoscheme_df = load_geoscheme_df()
+    def fit(self,X,y=None):
+        return self
 
-    country_to_dict_mapping = {i: get_country_region_superregion(geoscheme_df, i) for i in unique_countries}
+    def get_country_mapping(self,X):
+        unique_countries = X.loc[:,self.column].unique()
 
+        return {country: get_country_region_superregion(self.geoscheme_df,country) for country in unique_countries}
 
-    return country_to_dict_mapping
+    def encode_column(self,mapping):
+        return pd.get_dummies(pd.DataFrame(pd.Series(mapping).to_dict()).T.applymap(lambda x: str(x) if type(x) == list else x))
+
+    def correct_mistaken_encodings(self,encoded_df):
+        mistakes = list(filter(lambda x: "_[" in x,encoded_df.columns))
+        correct_names = set(COUNTRIES + REGIONS + SUPERREGIONS)
+        entity = re.compile(r"\'(.+?)\'")
+        for mistake in mistakes:
+            mistaken_indices = encoded_df[encoded_df[mistake]==1].index
+            category, mistaken_regions = mistake.split('_')
+            regions = entity.findall(mistaken_regions)
+            for region in regions:
+                if region not in correct_names:
+                    region = entity.findall(region)
+                sub_column = ''.join([category,'_',region])
+                encoded_df.loc[mistaken_indices,sub_column] = 1
+        encoded_df.fillna(int(0),inplace=True)
+        encoded_df.drop(mistakes,axis=1,inplace=True)
+        return encoded_df
+
+    def transform(self,X,y=None):
+        X = X.copy()
+
+        country_mapping = self.get_country_mapping(X)
+
+        country_encoding = self.encode_column(X.loc[:,self.column].map(country_mapping))
+
+        return self.correct_mistaken_encodings(country_encoding)
+
 
 def encode_country_column(country_column: pd.Series):
     country_column = country_column.copy()
@@ -149,6 +180,38 @@ def encode_country_column(country_column: pd.Series):
     
     return country_one_hot
 
+class MultiValueCategoricalEncoder(BaseEstimator,TransformerMixin):
+    def __init__(self, feature):
+        self.feature = feature
+
+    def fit(self,X,y=None):
+        return self
+
+    def stack_column(self,X):
+        return X.loc[:,self.feature].apply(lambda x: 'üü'.join(x) if x else x).str.split('üü',expand=True).stack()
+
+    def get_dummies(self,stacked_column):
+        return pd.get_dummies(stacked_column,prefix=self.feature).groupby(level=0).sum()
+    
+    def transform(self, X, y=None):
+        X = X.copy()
+
+        stacked_column = self.stack_column(X)
+
+        dummies = self.get_dummies(stacked_column)
+
+        return pd.concat([X,dummies],axis=1)
+
+class GenreEncoder(MultiValueCategoricalEncoder):
+    def __init__(self,column):
+        super().__init__(column)
+
+    def stack_column(self,X):
+        return super().stack_column(X).apply(lambda x: 'Childrens' if x == "Children's" else x)
+
+    def get_dummies(self, stacked_column):
+        return super().get_dummies(stacked_column).drop('_'.join([self.feature,'Jazz']),axis=1)
+
 def encode_genre_column(genre_column: pd.Series):
     genre_column = genre_column.copy()
     unique_genres = get_genres(genre_column)
@@ -177,8 +240,6 @@ def encode_style_column(style_column: pd.Series):
     unique_styles = get_styles(style_column)
 
     df = pd.DataFrame({style: np.zeros(len(style_column)) for style in unique_styles})
-
-    entity = re.compile(r"\'(.+?)\'")
 
     def encode_styles(row):
         idx = row.name
@@ -513,3 +574,43 @@ def match_track_titles_to_standards(standards, track_titles):
     matches = [[unique_track_titles[index], standards_series.values[indices_idx][0],round(distances[index][0],2)] for index, indices_idx in tqdm(enumerate(indices))]
 
     return pd.DataFrame(matches, columns=['Original Name','Matched Name','Match Confidence'])
+
+
+## SKLEARN Transformers
+
+class RunningTimeImputer(BaseEstimator, TransformerMixin):
+    def __init__(self,running_time, number_of_tracks):
+        self.running_time = running_time
+        self.number_of_tracks = number_of_tracks
+        
+    def fit(self, X, y=None):
+        return self
+    
+    def transform(self, X, y=None):
+        X = X.copy()
+        
+        if not hasattr(self,'average_time_per_track'):
+            self.average_time_per_track = X.loc[:,self.running_time].mean() / X.loc[:,self.number_of_tracks].mean()
+            
+        null_indices = X[X.loc[:,self.running_time].isna()].index
+        
+        X.loc[null_indices,self.running_time] = X.loc[null_indices,self.number_of_tracks] * self.average_time_per_track
+        
+        return X
+        
+class ColumnRemover(BaseEstimator,TransformerMixin):
+    def __init__(self,cols_to_remove):
+        self.cols_to_remove = cols_to_remove
+    
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        X = X.copy()
+        
+        if type(self.cols_to_remove) == tuple:
+            self.cols_to_remove = list(self.cols_to_remove)
+        elif type(self.cols_to_remove) != list:
+            raise TypeError
+            
+        return X.drop(list(self.cols_to_remove),axis=1)

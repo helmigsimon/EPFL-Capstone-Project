@@ -10,7 +10,8 @@ from nltk.corpus import stopwords
 import nltk
 from functools import lru_cache
 from scipy.sparse import csr_matrix
-import sparse_dot_topn.sparse_dot_topn as ct
+#import sparse_dot_topn.sparse_dot_topn as ct
+
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from bs4 import BeautifulSoup
@@ -101,19 +102,27 @@ def make_market_value_col(median_col,market_price_col):
     
     return market_value_col
 
-def get_country_to_dict_mapping(api_data=None):
-    if not api_data:
-        data_loader = DataLoader()
-        api_data = data_loader.load_api_data()
+def encode_genre_column(genre_column: pd.Series):
+    genre_column = genre_column.copy()
+    unique_genres = get_genres(genre_column)
+    df = pd.get_dummies(pd.DataFrame({genre: np.zeros(len(genre_column)) for genre in unique_genres}))
 
-    unique_countries = api_data['country'].unique()
+    def encode_styles(row):
+        idx = row.name
+        for list_ in row:
+            try:
+                df.loc[idx,list_] = 1
+            except KeyError:
+                df.loc[idx,[element.replace("'","") for element in list_]] = 1
 
-    geoscheme_df = load_geoscheme_df()
+    pd.DataFrame(genre_column).progress_apply(encode_styles,axis=1)
+    
 
-    country_to_dict_mapping = {i: get_country_region_superregion(geoscheme_df, i) for i in unique_countries}
+    df = df.astype(np.uint8)
+    df.drop('Jazz',axis=1,inplace=True)
+    df.rename(columns={column:'genre_{}'.format(column) for column in df.columns},inplace=True)
+    return df
 
-
-    return country_to_dict_mapping
 
 def encode_country_column(country_column: pd.Series):
     country_column = country_column.copy()
@@ -149,27 +158,6 @@ def encode_country_column(country_column: pd.Series):
     
     return country_one_hot
 
-def encode_genre_column(genre_column: pd.Series):
-    genre_column = genre_column.copy()
-    unique_genres = get_genres(genre_column)
-    df = pd.get_dummies(pd.DataFrame({genre: np.zeros(len(genre_column)) for genre in unique_genres}))
-
-    def encode_styles(row):
-        idx = row.name
-        for list_ in row:
-            try:
-                df.loc[idx,list_] = 1
-            except KeyError:
-                df.loc[idx,[element.replace("'","") for element in list_]] = 1
-
-    pd.DataFrame(genre_column).progress_apply(encode_styles,axis=1)
-    
-
-    df = df.astype(np.uint8)
-    df.drop('Jazz',axis=1,inplace=True)
-    df.rename(columns={column:'genre_{}'.format(column) for column in df.columns},inplace=True)
-    return df
-
 
 def encode_style_column(style_column: pd.Series):
     style_column = style_column.copy()
@@ -177,8 +165,6 @@ def encode_style_column(style_column: pd.Series):
     unique_styles = get_styles(style_column)
 
     df = pd.DataFrame({style: np.zeros(len(style_column)) for style in unique_styles})
-
-    entity = re.compile(r"\'(.+?)\'")
 
     def encode_styles(row):
         idx = row.name
@@ -513,3 +499,5 @@ def match_track_titles_to_standards(standards, track_titles):
     matches = [[unique_track_titles[index], standards_series.values[indices_idx][0],round(distances[index][0],2)] for index, indices_idx in tqdm(enumerate(indices))]
 
     return pd.DataFrame(matches, columns=['Original Name','Matched Name','Match Confidence'])
+
+
