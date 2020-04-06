@@ -7,10 +7,13 @@ import os
 from data.util.paths import DATA_PATH
 
 class DataLoader:
-    def __init__(self):
-        self.api_data_client = APIDataClient()
-        self.high_level_feature_client = HighLevelFeatureClient()
-        self.extracted_data_client = ExtractedDataClient()
+    def __init__(self,db_name,db_path,db_dialect):
+        self.db_name = db_name
+        self.db_path = db_path
+        self.db_dialect = db_dialect
+        self.api_data_client = APIDataClient(db_name=db_name,db_path=db_path,db_dialect=db_dialect)
+        self.high_level_feature_client = HighLevelFeatureClient(db_name=db_name,db_path=db_path,db_dialect=db_dialect)
+        self.extracted_data_client = ExtractedDataClient(db_name=db_name,db_path=db_path,db_dialect=db_dialect)
 
     def _load_data_as_df(self,client,**kwargs):
         return pd.read_sql(client.name,client.engine,**kwargs)
