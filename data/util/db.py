@@ -1,19 +1,26 @@
 from typing import List, Tuple, Dict
 import sqlalchemy as db
+import os
 from data.util.paths import DATA_PATH
 import pandas as pd
 
 DIALECT = 'sqlite'
 
 class SQLClient():
-    def __init__(self,name: str,path: str,dialect: str=DIALECT):
+    def __init__(self,name: str,path: str,dialect: str):
         self.name = name
         self.path = path
         self.dialect = dialect
         self.connect()
 
+    def create_engine(self):
+        if self.dialect == 'sqlite':
+            return db.create_engine(''.join([self.dialect,':///',self.path,'/',self.name,'.sqlite']),connect_args={'check_same_thread':False})
+        if self.dialect == 'postgres':
+            return db.create_engine('postgresql+psycopg2://%s:%s@%s/%s' % (os.environ.get('POSTGRES_USR'),os.environ.get('POSTGRES_PWD'),self.path,self.name))
+        raise AttributeError('%s is not supported' % self.dialect)
     def connect(self):
-        self.engine = db.create_engine(''.join([self.dialect,':///',self.path,'/',self.name,'.',self.dialect]),connect_args={'check_same_thread':False})
+        self.engine = self.create_engine()
         self.connection = self.engine.connect()
         self.metadata = db.MetaData()
 
@@ -102,8 +109,8 @@ class APIDataClient(TableClient):
         db.Column('release_url',db.String())
     )
 
-    def __init__(self):
-        super().__init__('api_data',DATA_PATH,'jazz_album','sqlite')
+    def __init__(self,table_name = 'api_data',db_path = DATA_PATH,db_name = 'jazz_album' ,db_dialect='sqlite'):
+        super().__init__(table_name,db_path,db_name,db_dialect)
 
     
     def get_entries_by_years(self,years: List[int]):
@@ -173,8 +180,8 @@ class ExtractedDataClient(TableClient):
         db.Column('track_titles',db.PickleType())
     )
 
-    def __init__(self):
-        super().__init__('extracted_data',DATA_PATH,'jazz_album','sqlite')
+    def __init__(self,table_name = 'extracted_data',db_path = DATA_PATH,db_name = 'jazz_album' ,db_dialect='sqlite'):
+        super().__init__(table_name,db_path,db_name,db_dialect)
 
 
 
@@ -189,5 +196,5 @@ class HighLevelFeatureClient(TableClient):
         ]
     )
 
-    def __init__(self):
-        super().__init__('high_level_features',DATA_PATH,'jazz_album','sqlite')
+    def __init__(self,table_name = 'high_level_features',db_path = DATA_PATH,db_name = 'jazz_album' ,db_dialect='sqlite'):
+        super().__init__(table_name,db_path,db_name,db_dialect)
