@@ -21,13 +21,9 @@ class DataLoader:
     def load_api_data(self,client=None):
         return self._load_data_as_df(self.api_data_client)
     
-    def load_extracted_data(self,):
+    def load_extracted_data(self):
         return self._load_data_as_df(self.extracted_data_client)
 
-    def load_high_level_features(self,):
-        high_level_feature_df = self._load_data_as_df(self.high_level_feature_client,chunksize=10000)
-
-        
-
-        return high_level_feature_df
+    def load_high_level_features(self):
+        return self._load_data_as_df(self.high_level_feature_client,chunksize=10000)
 

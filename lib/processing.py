@@ -11,6 +11,7 @@ import nltk
 from functools import lru_cache
 from scipy.sparse import csr_matrix
 import sparse_dot_topn.sparse_dot_topn as ct
+from collections.abc import Iterable
 
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -501,3 +502,4 @@ def match_track_titles_to_standards(standards, track_titles):
     return pd.DataFrame(matches, columns=['Original Name','Matched Name','Match Confidence'])
 
 
+    

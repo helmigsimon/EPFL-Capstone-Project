@@ -461,9 +461,17 @@ class StandardCountEncoder(BaseEstimator, TransformerMixin):
         if not standards:
             standards = load_from_pkl('standards')
         self.standards = standards
-        self.standards_lookup = self.get_standards_lookup()
+        self._standards_lookup = self.get_standards_lookup()
 
     def fit(self,X,y=None):
+        matched_track_titles = self.match_track_titles_to_standards(X.loc[:,self.feature])
+
+        matched_track_titles = matched_track_titles[matched_track_titles['Match Confidence'] < 0.7]
+
+        tfidf_lookup = {row['Original Name']:row['Matched Name'] for _, row in matched_track_titles.iterrows() if row['Original Name'] not in self._standards_lookup}
+
+        self._standards_lookup = dict(**self._standards_lookup,**tfidf_lookup)
+        
         return self
 
     def get_standards_lookup(self):
@@ -473,8 +481,8 @@ class StandardCountEncoder(BaseEstimator, TransformerMixin):
     def count_jazz_standards(self,title_list):
         standards_counter = 0
         for title in title_list:
-            title = title.lower().translate(str.maketrans('', '', string.punctuation))
-            if title in self.standards_lookup:
+            title = str(title).lower().translate(str.maketrans('', '', string.punctuation))
+            if title in self._standards_lookup:
                 standards_counter += 1               
         return standards_counter
 
@@ -507,16 +515,57 @@ class StandardCountEncoder(BaseEstimator, TransformerMixin):
 
     def transform(self, X, y=None):
         X = X.copy()
-        matched_track_titles = self.match_track_titles_to_standards(X.loc[:,self.feature])
-
-        matched_track_titles = matched_track_titles[matched_track_titles['Match Confidence'] < 0.7]
-
-        tfidf_lookup = {row['Original Name']:row['Matched Name'] for _, row in match_title_to_standards_df.iterrows() if row['Original Name'] not in self.standards_lookup}
-
-        self.standards_lookup = dict(**self.standards_lookup,**tfidf_lookup)
 
         X.loc[:,'_'.join([self.feature,'count'])] = X.loc[:,self.feature].apply(self.count_jazz_standards)
 
         return X
 
 
+class ColumnStore(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        pass
+    
+    def _get_column_set(self,str_):
+        return set(column for column in self._all if str_ in column)
+
+    def _get_null_columns(self, X,threshold=None):
+        if not threshold:
+            threshold = 0
+        return set(filter(lambda x: X[x].isna().sum() > threshold,self._all))
+
+    def fit(self,X,column_sets,**kwargs):
+        self._all = set(X.columns)
+        self._rest = self._all
+
+        assert type(column_sets) == dict
+
+        for name, columns in tqdm(column_sets.items()):
+            set_name = f'_{name}'
+            if columns is None:
+                setattr(self,set_name,self._get_null_columns(X,kwargs.get('threshold')))
+                continue
+            
+            if not isinstance(columns,Iterable):
+                raise TypeError('Value of column_sets attribute must be iterable')
+       
+            if type(columns) == dict:
+            
+                for column_group, columns_ in columns.items():
+                    if type(columns_) == str:
+                        columns_ = self._get_column_set(columns_)
+                    column_group_set = set(columns_)
+                    column_group_name = '_'.join([set_name,column_group])
+                    setattr(self,column_group_name,column_group_set)
+                    setattr(self,set_name,set((
+                        *getattr(self,set_name),
+                        *column_group_set
+                    )))
+                self._rest -= getattr(self,set_name)
+                continue
+
+            if type(columns) == str:
+                columns = self._get_column_set(columns)
+
+            columns = set(columns)
+            setattr(self,set_name,columns)
+            self._rest -= columns
