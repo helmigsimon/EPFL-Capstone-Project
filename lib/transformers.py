@@ -509,7 +509,7 @@ class StandardCountEncoder(BaseEstimator, TransformerMixin):
         X = X.copy()
         matched_track_titles = self.match_track_titles_to_standards(X.loc[:,self.feature])
 
-        matched_track_titles = match_track_titles[match_track_titles['Match Confidence'] < 0.7]
+        matched_track_titles = matched_track_titles[matched_track_titles['Match Confidence'] < 0.7]
 
         tfidf_lookup = {row['Original Name']:row['Matched Name'] for _, row in match_title_to_standards_df.iterrows() if row['Original Name'] not in self.standards_lookup}
 
