@@ -3,6 +3,7 @@ import re
 import pickle
 import string
 from lib.processing import *
+from collections.abc import Iterable, Callable
 from lib.util.processing import *
 from data.util.environment_variables import COUNTRIES, REGIONS, SUPERREGIONS
 
@@ -533,9 +534,21 @@ class ColumnStore(BaseEstimator, TransformerMixin):
             threshold = 0
         return set(filter(lambda x: X[x].isna().sum() > threshold,self._all))
 
+    def _filter_by_function(self, func, X):
+        columns = []
+        for column in self._all:
+            try:
+                if func(X.loc[:,column]):
+                    columns.append(column)
+            except TypeError:
+                pass
+        
+        return set(columns)
+
     def fit(self,X,column_sets,**kwargs):
+        X = X.copy()
         self._all = set(X.columns)
-        self._rest = self._all
+        self._rest = self._all.copy()
 
         assert type(column_sets) == dict
 
@@ -544,11 +557,17 @@ class ColumnStore(BaseEstimator, TransformerMixin):
             if columns is None:
                 setattr(self,set_name,self._get_null_columns(X,kwargs.get('threshold')))
                 continue
+
+            if isinstance(columns,Callable):
+                setattr(self,set_name,self._filter_by_function(columns,X))
+                continue
             
             if not isinstance(columns,Iterable):
+                print(name)
                 raise TypeError('Value of column_sets attribute must be iterable')
        
-            if type(columns) == dict:
+            setattr(self,set_name,set())
+            if isinstance(columns,dict):
             
                 for column_group, columns_ in columns.items():
                     if type(columns_) == str:
@@ -563,9 +582,68 @@ class ColumnStore(BaseEstimator, TransformerMixin):
                 self._rest -= getattr(self,set_name)
                 continue
 
-            if type(columns) == str:
+            if isinstance(columns,str):
                 columns = self._get_column_set(columns)
 
             columns = set(columns)
             setattr(self,set_name,columns)
             self._rest -= columns
+
+class OutlierRemover(BaseEstimator, TransformerMixin):
+    def __init__(self,features,sigma=3):
+        self.features = [features] if isinstance(features,str) else features
+        self.sigma = 3
+
+    def fit(self,X,y=None):
+        X_ = pd.DataFrame([X.loc[:,self.features].mean(),X.loc[:,self.features].std()],columns=self.features,index=('mean','sigma'))
+        X_.loc['upper_bound',:] = X_.loc['mean',:] + 3*X_.loc['sigma',:]
+        X_.loc['lower_bound',:] = X_.loc['mean',:] - 3*X_.loc['sigma',:]
+
+        self._bounds = {feature: (X_.loc['lower_bound',feature],X_.loc['upper_bound',feature]) for feature in self.features}        
+
+        return self
+
+    def transform(self,X,y=None):
+        X = X.copy()
+
+        for feature in self.features:
+            if not X[feature].dtype in (int,float):
+                continue
+            X = X[X[feature] > self._bounds[feature][0]]
+            X = X[X[feature] < self._bounds[feature][1]]
+
+        return X
+
+class IndicatorCounter(BaseEstimator,TransformerMixin):
+    def __init__(self,columns, counter_name):
+        self.columns = columns
+        self.counter_name = counter_name
+
+    def fit(self,X,y=None):
+        X = X.copy()
+
+        self.indicator_counter = X.loc[:,self.columns].sum(axis=1)
+
+        return self
+
+    def transform(self,X,y=None):
+        X = X.copy()
+
+        X.loc[:,self.counter_name] = self.indicator_counter
+
+        return X
+
+class IndicatorRemover(IndicatorCounter):
+    def __init__(self, columns, counter_name, threshold):
+        super().__init__(columns,counter_name)
+        self.threshold = threshold
+
+    def fit(self, X, y=None):
+        X = X.copy()
+        if not self.counter_name in X.columns:
+            super().fit
+
+        return self
+
+    def transform(self, X, y=None):
+        X = X.copy()
