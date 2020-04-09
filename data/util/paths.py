@@ -10,3 +10,4 @@ try:
     IMAGE_PATH_HD = Path('/Volumes/Simon Helmig Harddrive/EPFL/DiscogsImages')
 except:
     IMAGE_PATH_HD = None
+

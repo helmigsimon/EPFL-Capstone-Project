@@ -449,14 +449,18 @@ def expand_format_description_column(df):
 def convert_last_sold_encoding(last_sold):
     pass
 
-def save_to_pkl(obj, name):
+def save_to_pkl(obj, name, path=None):
+    if not path:
+        path = DATA_PATH
     file_name = '{}.pkl'.format(name) 
-    with open(os.path.join(DATA_PATH,file_name),'wb') as f:
+    with open(os.path.join(path,file_name),'wb') as f:
         pickle.dump(obj,f)
 
-def load_from_pkl(name):
+def load_from_pkl(name,path):
+    if not path:
+        path = DATA_PATH
     file_name = '{}.pkl'.format(name) 
-    with open(os.path.join(DATA_PATH,file_name),'rb') as f:
+    with open(os.path.join(path,file_name),'rb') as f:
         df = pickle.load(f)
     return df
 
@@ -502,4 +506,7 @@ def match_track_titles_to_standards(standards, track_titles):
     return pd.DataFrame(matches, columns=['Original Name','Matched Name','Match Confidence'])
 
 
-    
+def make_year_range_dict(columns,df):
+    return {
+        column: range(df[df[column]==1]['year'].min(),df[df[column]==1]['year'].max()+1) for column in columns
+    }    

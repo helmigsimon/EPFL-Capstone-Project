@@ -3,7 +3,7 @@ import re
 import pickle
 import string
 from lib.processing import *
-from collections.abc import Iterable, Callable
+from collections.abc import Iterable, Callable, Collection
 from lib.util.processing import *
 from data.util.environment_variables import COUNTRIES, REGIONS, SUPERREGIONS
 
@@ -29,7 +29,9 @@ class NullRemover(RowRemover):
         super().__init__(features)
 
     def remove(self,X):
-        return X.dropna(self.features)
+        if not isinstance(self.features,Collection):
+            self.features = [self.features]
+        return X.dropna(subset=self.features)
 
 class DuplicateRemover(RowRemover):
     def __init__(self,features):
@@ -119,10 +121,8 @@ class ColumnRemover(BaseEstimator,TransformerMixin):
         
         if type(self.cols_to_remove) == tuple:
             self.cols_to_remove = list(self.cols_to_remove)
-        elif type(self.cols_to_remove) != list:
-            raise TypeError
             
-        return X.drop(list(self.cols_to_remove),axis=1)
+        return X.drop(self.cols_to_remove,axis=1)
 
 class MultiValueCategoricalEncoder(BaseEstimator,TransformerMixin):
     def __init__(self, feature):
@@ -498,7 +498,7 @@ class StandardCountEncoder(BaseEstimator, TransformerMixin):
         nbrs = NearestNeighbors(n_neighbors=1,n_jobs=-1).fit(tfidf)
 
         track_titles_expanded = []
-        track_titles.progress_apply(lambda title_list: track_titles_expanded.extend([lowercase_no_punctuation(title) for title in pickle.loads(title_list)]))
+        track_titles.progress_apply(lambda title_list: track_titles_expanded.extend([lowercase_no_punctuation(title) for title in title_list]))
         
         unique_track_titles = set(track_titles_expanded)
 
@@ -628,22 +628,54 @@ class IndicatorCounter(BaseEstimator,TransformerMixin):
 
     def transform(self,X,y=None):
         X = X.copy()
-
         X.loc[:,self.counter_name] = self.indicator_counter
+
+        assert X.loc[:,self.counter_name].sum() == X.loc[:,self.columns].sum(axis=1).sum()
 
         return X
 
-class IndicatorRemover(IndicatorCounter):
-    def __init__(self, columns, counter_name, threshold):
+class IndicatorConsolidator(IndicatorCounter):
+    def __init__(self, columns, output_column, threshold=None, counter_name=None):
         super().__init__(columns,counter_name)
+        self.columns = columns
         self.threshold = threshold
-
+        self.output_column = output_column
+    
     def fit(self, X, y=None):
-        X = X.copy()
-        if not self.counter_name in X.columns:
-            super().fit
+        if (self.counter_name) and (self.counter_name not in self.columns):
+            super().fit(X)
 
+        if not self.threshold:
+            self.threshold = X[self.columns].sum().median()
+
+        self.consolidation_columns = list(filter(lambda x: X[x].sum() < self.threshold,self.columns))        
         return self
 
     def transform(self, X, y=None):
+        print('testing')
         X = X.copy()
+        if hasattr(self,'indicator_counter'):
+            X = super().transform(X)
+        X.loc[:,self.output_column] = X.loc[:,self.consolidation_columns].max(axis=1)
+
+        assert X.loc[:,self.output_column].sum() == X.loc[:,self.consolidation_columns].max(axis=1).sum()
+
+        return X.drop(self.consolidation_columns,axis=1)    
+
+class LastSoldEncoder(BaseEstimator,TransformerMixin):
+    def __init__(self,feature,new_feature=None,end_date=None):
+        self.feature = feature
+        self.end_date = end_date
+        self.new_feature = new_feature
+
+    def fit(self,X,y=None):
+        if not self.end_date:
+            self.end_date = X[self.feature].max()
+        if not self.new_feature:
+            self.new_feature = '_'.join['days_since',self.feature]
+        return self
+
+    def transform(self,X,y=None):
+        X = X.copy()
+        X.loc[:,self.new_feature] = X.loc[:,self.feature].apply(lambda x: (self.end_date-x).days)
+        return X
