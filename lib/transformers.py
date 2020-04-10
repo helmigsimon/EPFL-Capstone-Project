@@ -29,7 +29,7 @@ class NullRemover(RowRemover):
         super().__init__(features)
 
     def remove(self,X):
-        if not isinstance(self.features,Collection):
+        if (not isinstance(self.features,Collection)) or isinstance(self.features,str):
             self.features = [self.features]
         return X.dropna(subset=self.features)
 
@@ -223,7 +223,7 @@ class CountryEncoder(BaseEstimator, TransformerMixin):
         for bool_, prefix in self.to_drop:
             if not bool_:
                 drop_columns = list(filter(lambda x: prefix in x, country_encoding.columns))
-                country_encoding.drop(drop_columns,axis=1)
+                country_encoding.drop(drop_columns,axis=1,inplace=True)
 
         return pd.concat([X,self.correct_mistaken_encodings(country_encoding)],axis=1)
 
@@ -257,7 +257,6 @@ class StringMatcher:
         return [''.join(ngram) for ngram in ngrams]
 
     def create_match_lookup(self,match_df):
-
         #Create match lookup dictionary
         match_lookup = {}
         for index,row in match_df.iterrows():
@@ -267,8 +266,8 @@ class StringMatcher:
                 if len(row['left_side']) < len(match_lookup[row['right_side']]):
                     match_lookup[row['right_side']] = row['left_side']
 
-        #Make one-way references circular
-        for key, value in match_lookup.copy().items():
+        #Make dead-end references circular
+        for key, value in match_lookup.items():
             if not match_lookup.get(value):
                 match_lookup[value] = key
 
@@ -285,6 +284,7 @@ class StringMatcher:
                         match_lookup[key] = key
                     else:
                         match_lookup[value] = value
+
         #Resolve multi-node reference chains to direct mappings of best name value
         for key, value in match_lookup.items():
             if key != match_lookup[value]:
@@ -297,7 +297,11 @@ class StringMatcher:
 
                 match_lookup[key] = lookup_value
         
-        return {key: value for key,value in match_lookup.items() if self.filter_match_lookup(key,value)}
+        return {
+            key: value 
+            for key,value in match_lookup.items() 
+            if self.filter_match_lookup(key,value)
+        }
         
     def filter_match_lookup(self,key,value):
         if key == value:
@@ -591,7 +595,7 @@ class ColumnStore(BaseEstimator, TransformerMixin):
 
 class OutlierRemover(BaseEstimator, TransformerMixin):
     def __init__(self,features,sigma=3):
-        self.features = [features] if isinstance(features,str) else features
+        self.features = [features] if isinstane(features,str) else features
         self.sigma = 3
 
     def fit(self,X,y=None):
@@ -679,3 +683,5 @@ class LastSoldEncoder(BaseEstimator,TransformerMixin):
         X = X.copy()
         X.loc[:,self.new_feature] = X.loc[:,self.feature].apply(lambda x: (self.end_date-x).days)
         return X
+        
+
