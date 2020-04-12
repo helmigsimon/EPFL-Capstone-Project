@@ -2,12 +2,12 @@ import pandas as pd
 import re
 import pickle
 import string
-from lib.processing import *
 from collections.abc import Iterable, Callable, Collection
-from lib.util.processing import *
 from data.util.environment_variables import COUNTRIES, REGIONS, SUPERREGIONS
+from lib.processing import *
 
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils.random import sample_without_replacement
 
 class RowRemover(BaseEstimator, TransformerMixin):
     def __init__(self,features):
@@ -267,7 +267,7 @@ class StringMatcher:
                     match_lookup[row['right_side']] = row['left_side']
 
         #Make dead-end references circular
-        for key, value in match_lookup.items():
+        for key, value in match_lookup.copy().items():
             if not match_lookup.get(value):
                 match_lookup[value] = key
 
@@ -595,7 +595,7 @@ class ColumnStore(BaseEstimator, TransformerMixin):
 
 class OutlierRemover(BaseEstimator, TransformerMixin):
     def __init__(self,features,sigma=3):
-        self.features = [features] if isinstane(features,str) else features
+        self.features = [features] if isinstance(features,str) else features
         self.sigma = 3
 
     def fit(self,X,y=None):
@@ -639,7 +639,7 @@ class IndicatorCounter(BaseEstimator,TransformerMixin):
         return X
 
 class IndicatorConsolidator(IndicatorCounter):
-    def __init__(self, columns, output_column, threshold=None, counter_name=None):
+    def __init__(self, output_column,columns=None, threshold=None, counter_name=None):
         super().__init__(columns,counter_name)
         self.columns = columns
         self.threshold = threshold
@@ -649,6 +649,9 @@ class IndicatorConsolidator(IndicatorCounter):
         if (self.counter_name) and (self.counter_name not in self.columns):
             super().fit(X)
 
+        if not self.columns:
+            self.columns = X.columns        
+
         if not self.threshold:
             self.threshold = X[self.columns].sum().median()
 
@@ -656,7 +659,6 @@ class IndicatorConsolidator(IndicatorCounter):
         return self
 
     def transform(self, X, y=None):
-        print('testing')
         X = X.copy()
         if hasattr(self,'indicator_counter'):
             X = super().transform(X)
@@ -685,3 +687,24 @@ class LastSoldEncoder(BaseEstimator,TransformerMixin):
         return X
         
 
+class NoReplacementSampler(BaseEstimator, TransformerMixin):
+    def __init__(self,sample_proportion=0.1,random_state=0):
+        self.sample_proportion = sample_proportion
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        X = X.copy()
+
+        X.reset_index(inplace=True)
+
+        sampled_indices = sample_without_replacement(
+            n_population=len(X),
+            n_samples=int(len(X)*self.sample_proportion),
+            random_state=self.random_state
+        )
+
+
+        return X.loc[sampled_indices,:].drop('index',axis=1)
