@@ -8,7 +8,7 @@ extracted_pipe = Pipeline([
     ('make_market_value', ColumnCombiner('median','market_price','market_value')),
     ('remove_duplicates', DuplicateRemover('release_id')),
     ('remove_nulls',NullRemover('market_value')),
-    ('count_standards',StandardCountEncoder('track_titles')),
+    ('count_standards',StandardCountEncoder('track_titles',DATA_PATH)),
     ('count_days_since_last_sale',LastSoldEncoder(feature='last_sold',new_feature='days_since_last_sale'))
 ])
 
