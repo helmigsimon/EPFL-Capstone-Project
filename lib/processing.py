@@ -302,12 +302,12 @@ def expand_format_description_column(df):
 def convert_last_sold_encoding(last_sold):
     pass
 
-def save_to_pkl(obj, name, path=DATA_PATH):
+def save_to_pkl(obj, name, path):
     file_name = '{}.pkl'.format(name) 
     with open(os.path.join(path,file_name),'wb') as f:
         pickle.dump(obj,f)
 
-def load_from_pkl(name,path=DATA_PATH):
+def load_from_pkl(name,path):
     file_name = '{}.pkl'.format(name) 
     with open(os.path.join(path,file_name),'rb') as f:
         df = pickle.load(f)

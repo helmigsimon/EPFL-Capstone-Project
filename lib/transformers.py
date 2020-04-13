@@ -502,7 +502,7 @@ class StandardCountEncoder(BaseEstimator, TransformerMixin):
         nbrs = NearestNeighbors(n_neighbors=1,n_jobs=-1).fit(tfidf)
 
         track_titles_expanded = []
-        track_titles.progress_apply(lambda title_list: track_titles_expanded.extend([lowercase_no_punctuation(title) for title in title_list]))
+        track_titles.apply(lambda title_list: track_titles_expanded.extend([lowercase_no_punctuation(title) for title in title_list]))
         
         unique_track_titles = set(track_titles_expanded)
 
