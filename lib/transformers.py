@@ -461,10 +461,10 @@ class TimePeriodEncoder(BaseEstimator, TransformerMixin):
 
 
 class StandardCountEncoder(BaseEstimator, TransformerMixin):
-    def __init__(self,feature='track_titles',standards=None):
+    def __init__(self,feature='track_titles',standards=None,**kwargs):
         self.feature = feature
         if not standards:
-            standards = load_from_pkl('standards')
+            standards = load_from_pkl('standards',**kwargs)
         self.standards = standards
         self._standards_lookup = self.get_standards_lookup()
 
