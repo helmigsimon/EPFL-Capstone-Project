@@ -20,7 +20,7 @@ class RowRemover(BaseEstimator, TransformerMixin):
         raise NotImplementedError
 
     def transform(self, X, y = None):
-        X = X.copy()
+        #X = X.copy()
 
         return self.remove(X)
 
@@ -55,7 +55,7 @@ class FeatureSplitter(BaseEstimator,TransformerMixin):
         #return X[self.feature].str.split(self.delimiter,n=self.n,expand=self.expand)
 
     def transform(self,X,y=None):
-        X = X.copy()
+#        X = X.copy()
 
         return self.split_feature(X)
 
@@ -78,7 +78,7 @@ class ColumnCombiner(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X, y=None):
-        X = X.copy()
+       # X = X.copy()
     
         X.loc[:,self.new_column] = X.loc[:,self.base_column]
         
@@ -98,7 +98,7 @@ class RunningTimeImputer(BaseEstimator, TransformerMixin):
         return self
     
     def transform(self, X, y=None):
-        X = X.copy()
+        #X = X.copy()
         
         if not hasattr(self,'average_time_per_track'):
             self.average_time_per_track = X.loc[:,self.running_time].mean() / X.loc[:,self.number_of_tracks].mean()
@@ -117,7 +117,7 @@ class ColumnRemover(BaseEstimator,TransformerMixin):
         return self
 
     def transform(self, X, y=None):
-        X = X.copy()
+       # X = X.copy()
         
         if type(self.cols_to_remove) == tuple:
             self.cols_to_remove = list(self.cols_to_remove)
@@ -138,7 +138,7 @@ class MultiValueCategoricalEncoder(BaseEstimator,TransformerMixin):
         return pd.get_dummies(stacked_column,prefix=self.feature).groupby(level=0).sum()
     
     def transform(self, X, y=None):
-        X = X.copy()
+       # X = X.copy()
 
         stacked_column = self.stack_column(X)
 
@@ -154,7 +154,7 @@ class Unpickler(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self,X,y=None):
-        X = X.copy()
+        #X = X.copy()
 
         X.loc[:,self.columns] = X[self.columns].astype(bytes)
 
@@ -214,7 +214,7 @@ class CountryEncoder(BaseEstimator, TransformerMixin):
         return encoded_df
 
     def transform(self,X,y=None):
-        X = X.copy()
+        #X = X.copy()
 
         country_mapping = self.get_country_mapping(X)
 
@@ -322,7 +322,7 @@ class FeatureCleaner(BaseEstimator, TransformerMixin):
         raise NotImplementedError
 
     def transform(self,X,y=None):
-        X = X.copy()
+        #X = X.copy()
         clean_feature = X.loc[:,self.feature].apply(self.clean)
         match_lookup = self.string_matcher.get_match_lookup(clean_feature)
         X.loc[:,self.feature] = clean_feature.apply(lambda x: match_lookup[x] if match_lookup.get(x) else x)
@@ -346,7 +346,7 @@ class LabelCleaner(FeatureCleaner):
         return entry
 
     def transform(self,X,y=None):
-        X = X.copy()
+        #X = X.copy()
         stacked_column = self.multi_value_encoder.stack_column(X).apply(self.clean)
         match_lookup = self.string_matcher.get_match_lookup(stacked_column)
         X.loc[:,self.feature] =  stacked_column.apply(lambda x: match_lookup[x] if match_lookup.get(x) else x).unstack().loc[:,0]
@@ -386,7 +386,7 @@ class FormatEncoder(BaseEstimator,TransformerMixin):
         return format_list[0].get('descriptions')
 
     def transform(self,X,y=None):
-        X = X.copy()
+        #X = X.copy()
         feature_function_mapping = zip(('format_name','format_quantity','format_text','format_description'), (self.make_format_name,self.make_format_quantity,self.make_format_text,self.make_format_description))
 
         for feature, function in feature_function_mapping:
@@ -450,7 +450,7 @@ class TimePeriodEncoder(BaseEstimator, TransformerMixin):
         return 0
     
     def transform(self,X,y=None):
-        X = X.copy()
+        #X = X.copy()
         
         for category, time_periods in self.time_periods.items():
             for time_period, year_tuple in time_periods.items():
@@ -519,7 +519,7 @@ class StandardCountEncoder(BaseEstimator, TransformerMixin):
         return pd.DataFrame(matches, columns=['Original Name','Matched Name','Match Confidence'])   
 
     def transform(self, X, y=None):
-        X = X.copy()
+        #X = X.copy()
 
         X.loc[:,'_'.join([self.feature,'count'])] = X.loc[:,self.feature].apply(self.count_jazz_standards)
 
@@ -550,7 +550,7 @@ class ColumnStore(BaseEstimator, TransformerMixin):
         return set(columns)
 
     def fit(self,X,column_sets,**kwargs):
-        X = X.copy()
+        #X = X.copy()
         self._all = set(X.columns)
         self._rest = self._all.copy()
 
@@ -608,7 +608,7 @@ class OutlierRemover(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self,X,y=None):
-        X = X.copy()
+#        X = X.copy()
 
         for feature in self.features:
             if not X[feature].dtype in (int,float):
@@ -624,14 +624,14 @@ class IndicatorCounter(BaseEstimator,TransformerMixin):
         self.counter_name = counter_name
 
     def fit(self,X,y=None):
-        X = X.copy()
+        #X = X.copy()
 
         self.indicator_counter = X.loc[:,self.columns].sum(axis=1)
 
         return self
 
     def transform(self,X,y=None):
-        X = X.copy()
+        #X = X.copy()
         X.loc[:,self.counter_name] = self.indicator_counter
 
         assert X.loc[:,self.counter_name].sum() == X.loc[:,self.columns].sum(axis=1).sum()
@@ -659,7 +659,7 @@ class IndicatorConsolidator(IndicatorCounter):
         return self
 
     def transform(self, X, y=None):
-        X = X.copy()
+        #X = X.copy()
         if hasattr(self,'indicator_counter'):
             X = super().transform(X)
         X.loc[:,self.output_column] = X.loc[:,self.consolidation_columns].max(axis=1)
@@ -682,7 +682,7 @@ class LastSoldEncoder(BaseEstimator,TransformerMixin):
         return self
 
     def transform(self,X,y=None):
-        X = X.copy()
+#        X = X.copy()
         X.loc[:,self.new_feature] = X.loc[:,self.feature].apply(lambda x: (self.end_date-x).days)
         return X
         
@@ -696,7 +696,7 @@ class NoReplacementSampler(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X, y=None):
-        X = X.copy()
+#        X = X.copy()
 
         X.reset_index(inplace=True)
 

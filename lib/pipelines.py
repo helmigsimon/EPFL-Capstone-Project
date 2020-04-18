@@ -40,3 +40,4 @@ api_pipe = Pipeline([
     ('format_columns', format_pipe),
     ('encode_time_periods', TimePeriodEncoder())
 ])
+
