@@ -687,7 +687,7 @@ class LastSoldEncoder(BaseEstimator,TransformerMixin):
         return X
         
 
-class NoReplacementSampler(BaseEstimator, TransformerMixin):
+class Sampler(BaseEstimator, TransformerMixin):
     def __init__(self,sample_proportion=0.1,random_state=0):
         self.sample_proportion = sample_proportion
         self.random_state = random_state
