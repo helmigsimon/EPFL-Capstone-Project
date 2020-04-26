@@ -708,3 +708,26 @@ class Sampler(BaseEstimator, TransformerMixin):
 
 
         return X.loc[sampled_indices,:].drop('index',axis=1)
+
+class IndicatorReducer(BaseEstimator,TransformerMixin):
+    def __init__(self, indicators, algorithm,components,reduced_column_prefix= 'indicator_reduced'):
+        self.indicators = indicators
+        self.algorithm = algorithm
+        self.components = components
+        self.reduced_column_prefix = reduced_column_prefix
+  
+    def fit(self,X,y=None):
+        return self
+
+    def transform(self,X,y=None):
+        X = X.copy()
+
+        algorithm = self.algorithm(n_components=self.components)
+
+        reduced_indicators = pd.DataFrame(
+            algorithm.fit_transform(X.loc[:,self.indicators].values),
+            index=X.index,
+            columns=['_'.join([self.reduced_column_prefix,str(i)]) for i in range(self.components)]
+            )
+
+        return pd.concat([X, reduced_indicators],axis=1)
