@@ -4,14 +4,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class GridSearchPlotter:
+    """
+    Takes a GridSearchCV Object as input and plots the development of training loss and validation scores during cross-validation for a given hyperparameter
+    Inspired by the function outlined in the following blogpost: https://matthewbilyeu.com/blog/2019-02-05/validation-curve-plot-from-gridsearchcv-results
+    """
     def __init__(self,grid_search_cv):
         self.grid_search_cv = grid_search_cv
          
     def _create_slices(self,idx,parameter,base_parameter_idx):
+        """
+        Creates the index slices to be used to identify the relevant training and validation scores statistics 
+        """
         if idx == base_parameter_idx:
             return slice(None)
         best_parameter_value = self.grid_search_cv.best_params_[parameter]
-        print(best_parameter_value)
         best_parameter_idx = 0
         if isinstance(self.parameter_ranges[idx], np.ndarray):
             best_parameter_idx = self.parameter_ranges[idx].tolist().index(best_parameter_value)

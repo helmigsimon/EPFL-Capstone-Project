@@ -7,7 +7,6 @@ import pickle
 import time
 import os
 import sqlalchemy.exc
-import pickle
 from typing import Dict
 import requests
 import pandas as pd

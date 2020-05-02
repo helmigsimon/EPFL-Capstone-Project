@@ -10,6 +10,9 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.random import sample_without_replacement
 
 class RowRemover(BaseEstimator, TransformerMixin):
+    """
+    Abstract Base Class for Removing Rows in a DataFrame
+    """
     def __init__(self,features):
         self.features = features
 
@@ -20,11 +23,14 @@ class RowRemover(BaseEstimator, TransformerMixin):
         raise NotImplementedError
 
     def transform(self, X, y = None):
-        #X = X.copy()
+        X = X.copy()
 
         return self.remove(X)
 
 class NullRemover(RowRemover):
+    """
+    Removes Nulls from a DataFrame for specified features
+    """
     def __init__(self,features):
         super().__init__(features)
 
@@ -34,6 +40,9 @@ class NullRemover(RowRemover):
         return X.dropna(subset=self.features)
 
 class DuplicateRemover(RowRemover):
+    """
+    Removes Duplicates from a DataFrame for specified features
+    """
     def __init__(self,features):
         super().__init__(features)
 
@@ -41,6 +50,9 @@ class DuplicateRemover(RowRemover):
         return X.drop_duplicates(self.features)
 
 class FeatureSplitter(BaseEstimator,TransformerMixin):
+    """
+    Splits a string feature according to a pre-defined delimiter into a List or DataFrame
+    """
     def __init__(self,feature,delimiter,n,expand):
         self.feature = feature
         self.delimiter = delimiter
@@ -52,14 +64,17 @@ class FeatureSplitter(BaseEstimator,TransformerMixin):
 
     def split_feature(self,X):
         return pd.concat([X,X[self.feature].str.split(self.delimiter,n=self.n,expand=self.expand)],axis=1)
-        #return X[self.feature].str.split(self.delimiter,n=self.n,expand=self.expand)
+        return X[self.feature].str.split(self.delimiter,n=self.n,expand=self.expand)
 
     def transform(self,X,y=None):
-#        X = X.copy()
+        X = X.copy()
 
         return self.split_feature(X)
 
 class TitleSplitter(FeatureSplitter):
+    """
+    Project-Specific Implementation of the FeatureSplitter Base Class for handling the Title Feature
+    """
     def __init__(self):
         super().__init__('title',' - ',1,True)
 
@@ -69,6 +84,9 @@ class TitleSplitter(FeatureSplitter):
         return X.rename(columns={0:'artist',1:'title'})
 
 class ColumnCombiner(BaseEstimator, TransformerMixin):
+    """
+    Fills the nulls of a base column in a dataframe with the values of another column for the same indices
+    """
     def __init__(self,base_column,merge_column, new_column=None):
         self.base_column = base_column
         self.merge_column = merge_column
@@ -78,7 +96,7 @@ class ColumnCombiner(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X, y=None):
-       # X = X.copy()
+        X = X.copy()
     
         X.loc[:,self.new_column] = X.loc[:,self.base_column]
         
@@ -90,6 +108,9 @@ class ColumnCombiner(BaseEstimator, TransformerMixin):
         
 
 class RunningTimeImputer(BaseEstimator, TransformerMixin):
+    """
+    Project-Specific Implementation of a Transformer which imputes the running_time feature according to the number of tracks listed for each album
+    """
     def __init__(self,running_time, number_of_tracks):
         self.running_time = running_time
         self.number_of_tracks = number_of_tracks
@@ -98,7 +119,7 @@ class RunningTimeImputer(BaseEstimator, TransformerMixin):
         return self
     
     def transform(self, X, y=None):
-        #X = X.copy()
+        X = X.copy()
         
         if not hasattr(self,'average_time_per_track'):
             self.average_time_per_track = X.loc[:,self.running_time].mean() / X.loc[:,self.number_of_tracks].mean()
@@ -110,6 +131,9 @@ class RunningTimeImputer(BaseEstimator, TransformerMixin):
         return X
         
 class ColumnRemover(BaseEstimator,TransformerMixin):
+    """
+    Removes unwanted columns from a DataFrame
+    """
     def __init__(self,cols_to_remove):
         self.cols_to_remove = cols_to_remove
     
@@ -117,7 +141,7 @@ class ColumnRemover(BaseEstimator,TransformerMixin):
         return self
 
     def transform(self, X, y=None):
-       # X = X.copy()
+        X = X.copy()
         
         if type(self.cols_to_remove) == tuple:
             self.cols_to_remove = list(self.cols_to_remove)
@@ -125,6 +149,9 @@ class ColumnRemover(BaseEstimator,TransformerMixin):
         return X.drop(self.cols_to_remove,axis=1)
 
 class MultiValueCategoricalEncoder(BaseEstimator,TransformerMixin):
+    """
+    Dummy encodes features with array-like datatypes
+    """
     def __init__(self, feature):
         self.feature = feature
 
@@ -138,7 +165,7 @@ class MultiValueCategoricalEncoder(BaseEstimator,TransformerMixin):
         return pd.get_dummies(stacked_column,prefix=self.feature).groupby(level=0).sum()
     
     def transform(self, X, y=None):
-       # X = X.copy()
+        X = X.copy()
 
         stacked_column = self.stack_column(X)
 
@@ -147,6 +174,9 @@ class MultiValueCategoricalEncoder(BaseEstimator,TransformerMixin):
         return pd.concat([X,dummies],axis=1)
 
 class Unpickler(BaseEstimator, TransformerMixin):
+    """
+    Unpickles features with pickle datatype
+    """
     def __init__(self,columns):
         self.columns = columns
 
@@ -154,7 +184,7 @@ class Unpickler(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self,X,y=None):
-        #X = X.copy()
+        X = X.copy()
 
         X.loc[:,self.columns] = X[self.columns].astype(bytes)
 
@@ -165,6 +195,9 @@ class Unpickler(BaseEstimator, TransformerMixin):
 
 
 class GenreEncoder(MultiValueCategoricalEncoder):
+    """
+    Project-specific Implementation of the MultiValueCategoricalEncoder for the genre feature
+    """
     def __init__(self,column='genre'):
         super().__init__(column)
 
@@ -174,10 +207,10 @@ class GenreEncoder(MultiValueCategoricalEncoder):
     def get_dummies(self, stacked_column):
         return super().get_dummies(stacked_column).drop('_'.join([self.feature,'Jazz']),axis=1)
 
-
-
-
 class CountryEncoder(BaseEstimator, TransformerMixin):
+    """
+    Project-specific Implementation of an encoder for the country feature into country_, region_ and superregion_ dummy variables
+    """
     def __init__(self,column='country', geoscheme_df=None,country=True,region=True,superregion=True):
         self.column = column
         self.geoscheme_df = geoscheme_df if geoscheme_df else load_geoscheme_df()
@@ -214,7 +247,7 @@ class CountryEncoder(BaseEstimator, TransformerMixin):
         return encoded_df
 
     def transform(self,X,y=None):
-        #X = X.copy()
+        X = X.copy()
 
         country_mapping = self.get_country_mapping(X)
 
@@ -228,6 +261,7 @@ class CountryEncoder(BaseEstimator, TransformerMixin):
         return pd.concat([X,self.correct_mistaken_encodings(country_encoding)],axis=1)
 
 class StringMatcher:
+
     def __init__(self,similarity_threshold=0):
         self.similarity_threshold = similarity_threshold
 
@@ -311,6 +345,9 @@ class StringMatcher:
         return True
 
 class FeatureCleaner(BaseEstimator, TransformerMixin):
+    """
+    Abstract Base Class for the application of TF-IDF N-Grams String Matching 
+    """
     def __init__(self,feature,matcher_threshold=0):
         self.feature = feature
         self.string_matcher = StringMatcher(matcher_threshold)
@@ -322,7 +359,7 @@ class FeatureCleaner(BaseEstimator, TransformerMixin):
         raise NotImplementedError
 
     def transform(self,X,y=None):
-        #X = X.copy()
+        X = X.copy()
         clean_feature = X.loc[:,self.feature].apply(self.clean)
         match_lookup = self.string_matcher.get_match_lookup(clean_feature)
         X.loc[:,self.feature] = clean_feature.apply(lambda x: match_lookup[x] if match_lookup.get(x) else x)
@@ -346,7 +383,7 @@ class LabelCleaner(FeatureCleaner):
         return entry
 
     def transform(self,X,y=None):
-        #X = X.copy()
+        X = X.copy()
         stacked_column = self.multi_value_encoder.stack_column(X).apply(self.clean)
         match_lookup = self.string_matcher.get_match_lookup(stacked_column)
         X.loc[:,self.feature] =  stacked_column.apply(lambda x: match_lookup[x] if match_lookup.get(x) else x).unstack().loc[:,0]
@@ -367,6 +404,11 @@ class ArtistCleaner(FeatureCleaner):
         return entry
 
 class FormatEncoder(BaseEstimator,TransformerMixin):
+    """
+    Capstone-Specific
+    -----------------
+    Creates the columns for the keys present in the format dictionary feature
+    """
     def __init__(self,feature='formats'):
         self.feature = feature
 
@@ -386,7 +428,7 @@ class FormatEncoder(BaseEstimator,TransformerMixin):
         return format_list[0].get('descriptions')
 
     def transform(self,X,y=None):
-        #X = X.copy()
+        X = X.copy()
         feature_function_mapping = zip(('format_name','format_quantity','format_text','format_description'), (self.make_format_name,self.make_format_quantity,self.make_format_text,self.make_format_description))
 
         for feature, function in feature_function_mapping:
@@ -396,6 +438,11 @@ class FormatEncoder(BaseEstimator,TransformerMixin):
 
 
 class FormatDescriptionEncoder(MultiValueCategoricalEncoder):
+    """
+    Capstone-Specific
+    -----------------
+    Implementation of the MultiValueCategoricalEncoder for the format_description feature
+    """
     def __init__(self,feature='format_description'):
         super().__init__(feature)
 
@@ -405,6 +452,11 @@ class FormatDescriptionEncoder(MultiValueCategoricalEncoder):
 
 
 class FormatTextCleaner(FeatureCleaner):
+    """
+    Capstone-Specific
+    -----------------
+    Implementation of the FeatureCleaner for the format_text feature
+    """
     def __init__(self,feature='format_text'):
         super().__init__(feature)
 
@@ -424,6 +476,11 @@ class FormatTextCleaner(FeatureCleaner):
 
 
 class TimePeriodEncoder(BaseEstimator, TransformerMixin):
+    """
+    Capstone-Specific
+    -----------------
+    Dummy Encodes the Jazz Eras and Periods associated with the time-range considered in this project
+    """
     time_periods = {
         'era': {
             'swing': (1925,1945),
@@ -450,7 +507,7 @@ class TimePeriodEncoder(BaseEstimator, TransformerMixin):
         return 0
     
     def transform(self,X,y=None):
-        #X = X.copy()
+        X = X.copy()
         
         for category, time_periods in self.time_periods.items():
             for time_period, year_tuple in time_periods.items():
@@ -461,6 +518,11 @@ class TimePeriodEncoder(BaseEstimator, TransformerMixin):
 
 
 class StandardCountEncoder(BaseEstimator, TransformerMixin):
+    """
+    Capstone-Specific
+    -----------------
+    Counts the occurrence of Jazz Standards in the track listings of each album
+    """
     def __init__(self,feature='track_titles',standards=None,**kwargs):
         self.feature = feature
         if not standards:
@@ -519,7 +581,7 @@ class StandardCountEncoder(BaseEstimator, TransformerMixin):
         return pd.DataFrame(matches, columns=['Original Name','Matched Name','Match Confidence'])   
 
     def transform(self, X, y=None):
-        #X = X.copy()
+        X = X.copy()
 
         X.loc[:,'_'.join([self.feature,'count'])] = X.loc[:,self.feature].apply(self.count_jazz_standards)
 
@@ -527,6 +589,9 @@ class StandardCountEncoder(BaseEstimator, TransformerMixin):
 
 
 class ColumnStore(BaseEstimator, TransformerMixin):
+    """
+    Stores the Columns of a DataFrame according to a pre-defined Column Set
+    """
     def __init__(self):
         pass
     
@@ -550,7 +615,7 @@ class ColumnStore(BaseEstimator, TransformerMixin):
         return set(columns)
 
     def fit(self,X,column_sets,**kwargs):
-        #X = X.copy()
+        X = X.copy()
         self._all = set(X.columns)
         self._rest = self._all.copy()
 
@@ -594,6 +659,9 @@ class ColumnStore(BaseEstimator, TransformerMixin):
             self._rest -= columns
 
 class OutlierRemover(BaseEstimator, TransformerMixin):
+    """
+    Removes Rows from a DataFrame which exceed the three standard deviation range from the mean for the passed features
+    """
     def __init__(self,features,sigma=3):
         self.features = [features] if isinstance(features,str) else features
         self.sigma = 3
@@ -608,7 +676,7 @@ class OutlierRemover(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self,X,y=None):
-#        X = X.copy()
+        X = X.copy()
 
         for feature in self.features:
             if not X[feature].dtype in (int,float):
@@ -619,19 +687,22 @@ class OutlierRemover(BaseEstimator, TransformerMixin):
         return X
 
 class IndicatorCounter(BaseEstimator,TransformerMixin):
+    """
+    Counts the number of total categories of a specific indicator group for each row
+    """
     def __init__(self,columns, counter_name):
         self.columns = columns
         self.counter_name = counter_name
 
     def fit(self,X,y=None):
-        #X = X.copy()
+        X = X.copy()
 
         self.indicator_counter = X.loc[:,self.columns].sum(axis=1)
 
         return self
 
     def transform(self,X,y=None):
-        #X = X.copy()
+        X = X.copy()
         X.loc[:,self.counter_name] = self.indicator_counter
 
         assert X.loc[:,self.counter_name].sum() == X.loc[:,self.columns].sum(axis=1).sum()
@@ -639,6 +710,9 @@ class IndicatorCounter(BaseEstimator,TransformerMixin):
         return X
 
 class IndicatorConsolidator(IndicatorCounter):
+    """
+    Consolidates a given set of indicators into the most important indicators and records the rest in an indicator_counter column
+    """
     def __init__(self, output_column,columns=None, threshold=None, counter_name=None):
         super().__init__(columns,counter_name)
         self.columns = columns
@@ -659,7 +733,7 @@ class IndicatorConsolidator(IndicatorCounter):
         return self
 
     def transform(self, X, y=None):
-        #X = X.copy()
+        X = X.copy()
         if hasattr(self,'indicator_counter'):
             X = super().transform(X)
         X.loc[:,self.output_column] = X.loc[:,self.consolidation_columns].max(axis=1)
@@ -682,33 +756,10 @@ class LastSoldEncoder(BaseEstimator,TransformerMixin):
         return self
 
     def transform(self,X,y=None):
-#        X = X.copy()
+        X = X.copy()
         X.loc[:,self.new_feature] = X.loc[:,self.feature].apply(lambda x: (self.end_date-x).days)
         return X
         
-
-class Sampler(BaseEstimator, TransformerMixin):
-    def __init__(self,sample_proportion=0.1,random_state=0):
-        self.sample_proportion = sample_proportion
-        self.random_state = random_state
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X, y=None):
-#        X = X.copy()
-
-        X.reset_index(inplace=True)
-
-        sampled_indices = sample_without_replacement(
-            n_population=len(X),
-            n_samples=int(len(X)*self.sample_proportion),
-            random_state=self.random_state
-        )
-
-
-        return X.loc[sampled_indices,:].drop('index',axis=1)
-
 class IndicatorReducer(BaseEstimator,TransformerMixin):
     def __init__(self, indicators, algorithm,components,reduced_column_prefix= 'indicator_reduced'):
         self.indicators = indicators
