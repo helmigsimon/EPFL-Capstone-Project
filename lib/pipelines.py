@@ -44,6 +44,7 @@ column_encoding_pipe = Pipeline([
 
 format_pipe = Pipeline([
     ('make_columns', FormatEncoder()),
+    ('remove_quantity_outliers', OutlierRemover('format_quantity')),
     ('encode_descriptions',MultiValueCategoricalEncoder('format_description')),
     ('clean_format_text',FormatTextCleaner())
 ])

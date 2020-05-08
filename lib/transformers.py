@@ -159,10 +159,14 @@ class MultiValueCategoricalEncoder(BaseEstimator,TransformerMixin):
         return self
 
     def stack_column(self,X):
-        return X.loc[:,self.feature].apply(lambda x: 'üü'.join(x) if type(x)==list else str(x)).str.split('üü',expand=True).stack()
+        return X.loc[:,self.feature]\
+                .apply(lambda x: 'üü'.join(x) if type(x)==list else str(x))\
+                .str.split('üü',expand=True)\
+                .stack()
 
     def get_dummies(self,stacked_column):
-        return pd.get_dummies(stacked_column,prefix=self.feature).groupby(level=0).sum()
+        return pd.get_dummies(stacked_column,prefix=self.feature)\
+                .groupby(level=0).sum()
     
     def transform(self, X, y=None):
         X = X.copy()
@@ -178,7 +182,7 @@ class Unpickler(BaseEstimator, TransformerMixin):
     Unpickles features with pickle datatype
     """
     def __init__(self,columns):
-        self.columns = columns
+        self.columns = [columns] if isinstance(columns,str) else columns 
 
     def fit(self,X,y=None):
         return self
@@ -200,10 +204,10 @@ class GenreEncoder(MultiValueCategoricalEncoder):
     """
     def __init__(self,column='genre'):
         super().__init__(column)
-
-    def stack_column(self,X):
+   
+    def stack_column(self,X): 
         return super().stack_column(X).apply(lambda x: 'Childrens' if x == "Children's" else x)
-
+       
     def get_dummies(self, stacked_column):
         return super().get_dummies(stacked_column).drop('_'.join([self.feature,'Jazz']),axis=1)
 
@@ -244,7 +248,7 @@ class CountryEncoder(BaseEstimator, TransformerMixin):
                 encoded_df.loc[mistaken_indices,sub_column] = 1
         encoded_df.fillna(int(0),inplace=True)
         encoded_df.drop(mistakes,axis=1,inplace=True)
-        return encoded_df
+        return encoded_df.astype(np.uint8)
 
     def transform(self,X,y=None):
         X = X.copy()
@@ -344,7 +348,7 @@ class StringMatcher:
             return False
         return True
 
-class FeatureCleaner(BaseEstimator, TransformerMixin):
+class FeatureCleanReduce(BaseEstimator, TransformerMixin):
     """
     Abstract Base Class for the application of TF-IDF N-Grams String Matching 
     """
@@ -365,7 +369,7 @@ class FeatureCleaner(BaseEstimator, TransformerMixin):
         X.loc[:,self.feature] = clean_feature.apply(lambda x: match_lookup[x] if match_lookup.get(x) else x)
         return X  
 
-class LabelCleaner(FeatureCleaner):
+class LabelCleanReduce(FeatureCleanReduce):
     def __init__(self,feature='label'):
         super().__init__(feature,2)
         self.multi_value_encoder = MultiValueCategoricalEncoder(feature)
@@ -384,14 +388,21 @@ class LabelCleaner(FeatureCleaner):
 
     def transform(self,X,y=None):
         X = X.copy()
-        stacked_column = self.multi_value_encoder.stack_column(X).apply(self.clean)
+        stacked_column = self.multi_value_encoder\
+                                                .stack_column(X)\
+                                                .apply(self.clean)
+                                                
         match_lookup = self.string_matcher.get_match_lookup(stacked_column)
-        X.loc[:,self.feature] =  stacked_column.apply(lambda x: match_lookup[x] if match_lookup.get(x) else x).unstack().loc[:,0]
+        
+        X.loc[:,self.feature] =  stacked_column\
+                                               .apply(lambda x: match_lookup[x] if match_lookup.get(x) else x)\
+                                               .unstack()\
+                                               .loc[:,0]
         return X
 
 
 
-class ArtistCleaner(FeatureCleaner):
+class ArtistCleanReduce(FeatureCleanReduce):
     def __init__(self,feature='artist'):
         super().__init__(feature)
 
@@ -402,6 +413,38 @@ class ArtistCleaner(FeatureCleaner):
         entry = remove_punctuation(entry)
         entry = remove_excess_spaces(entry)
         return entry
+
+    def clean_main_artist(self,row):
+        if set(row.values) == set([None]):
+            return row
+        if isinstance(row[0],str) and len(row[0].strip(' ')) > 3:
+            return row
+        return self.clean_main_artist(pd.Series(list(row[1:].values)+[None],index=row.index))
+    
+    def clean_column(self, column):
+        return column\
+                .str.lower()\
+                .str.replace(r"[-,\\|]",'üü')\
+                .str.replace(r"[^a-zA-Z\d\s']",'')\
+                .str.replace('and','üü')\
+                .str.replace(r"[ü]+$","")\
+                .str.split('üü',expand=True)
+    
+        
+    def transform(self,X,y=None):
+        X = X.copy()
+        stacked_column = self.clean_column(X.loc[:,self.feature])\
+                            .apply(self.clean_main_artist,axis=1)\
+                            .stack()\
+                            .apply(self.clean)
+
+        match_lookup = self.string_matcher.get_match_lookup(stacked_column)
+
+        X.loc[:,self.feature] = stacked_column\
+                                    .apply(lambda x: match_lookup[x] if match_lookup.get(x) else x)\
+                                    .unstack()\
+                                    .loc[:,0]
+        return X
 
 class FormatEncoder(BaseEstimator,TransformerMixin):
     """
@@ -451,11 +494,11 @@ class FormatDescriptionEncoder(MultiValueCategoricalEncoder):
         return super().transform(X)
 
 
-class FormatTextCleaner(FeatureCleaner):
+class FormatTextCleanReduce(FeatureCleanReduce):
     """
     Capstone-Specific
     -----------------
-    Implementation of the FeatureCleaner for the format_text feature
+    Implementation of the FeatureCleanReduce for the format_text feature
     """
     def __init__(self,feature='format_text'):
         super().__init__(feature)
@@ -491,7 +534,6 @@ class TimePeriodEncoder(BaseEstimator, TransformerMixin):
             'big_band': (1930,1950),
             'bebop': (1940,1955),
             'cool': (1950,1970),
-            'fusion': (1970,2020)
         }
     }
     
@@ -583,7 +625,7 @@ class StandardCountEncoder(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         X = X.copy()
 
-        X.loc[:,'_'.join([self.feature,'count'])] = X.loc[:,self.feature].apply(self.count_jazz_standards)
+        X.loc[:,'_'.join(['standards_count'])] = X.loc[:,self.feature].apply(self.count_jazz_standards)
 
         return X
 
@@ -704,30 +746,6 @@ class IndicatorCounter(BaseEstimator,TransformerMixin):
     def transform(self,X,y=None):
         X = X.copy()
         X.loc[:,self.counter_name] = self.indicator_counter
-
-        assert X.loc[:,self.counter_name].sum() == X.loc[:,self.columns].sum(axis=1).sum()
-
-        return X
-
-class IndicatorConsolidator(IndicatorCounter):
-    """
-    Consolidates a given set of indicators into the most important indicators and records the rest in an indicator_counter column
-    """
-    def __init__(self, output_column,columns=None, threshold=None, counter_name=None):
-        super().__init__(columns,counter_name)
-        self.columns = columns
-        self.threshold = threshold
-        self.output_column = output_column
-    
-    def fit(self, X, y=None):
-        if (self.counter_name) and (self.counter_name not in self.columns):
-            super().fit(X)
-
-        if not self.columns:
-            self.columns = X.columns        
-
-        if not self.threshold:
-            self.threshold = X[self.columns].sum().median()
 
         self.consolidation_columns = list(filter(lambda x: X[x].sum() < self.threshold,self.columns))        
         return self
