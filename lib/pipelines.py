@@ -8,32 +8,37 @@ from .transformers import (
     NullRemover,
     StandardCountEncoder,
     LastSoldEncoder,
-    LabelCleaner,
-    ArtistCleaner,
+    LabelCleanReduce,
+    ArtistCleanReduce,
     CountryEncoder,
     GenreEncoder,
     MultiValueCategoricalEncoder,
     FormatEncoder,
-    FormatTextCleaner,
+    FormatTextCleanReduce,
     TitleSplitter,
-    TimePeriodEncoder
+    TimePeriodEncoder,
+    OutlierRemover
 )
 
 #Extracted Data Pipe
 extracted_pipe = Pipeline([
     ('remove_id', ColumnRemover('id')),
     ('unpickle', Unpickler(['track_titles'])),
-    ('make_market_value', ColumnCombiner('median','market_price','market_value')),
     ('remove_duplicates', DuplicateRemover('release_id')),
-    ('remove_nulls',NullRemover('market_value')),
     ('count_standards',StandardCountEncoder('track_titles',DATA_PATH)),
     ('count_days_since_last_sale',LastSoldEncoder(feature='last_sold',new_feature='days_since_last_sale'))
 ])
 
+market_value_pipe = Pipeline([
+    ('make_market_value', ColumnCombiner('median','market_price','market_value')),
+    ('remove_nulls',NullRemover('market_value')),
+    ('remove_outliers', OutlierRemover('market_value')) 
+])
+
 #API Pipes
 clean_text_pipe = Pipeline([
-    ('label', LabelCleaner()),
-    ('artist', ArtistCleaner())
+    ('label', LabelCleanReduce()),
+    ('artist', ArtistCleanReduce())
 ])
 
 column_encoding_pipe = Pipeline([
@@ -46,7 +51,7 @@ format_pipe = Pipeline([
     ('make_columns', FormatEncoder()),
     ('remove_quantity_outliers', OutlierRemover('format_quantity')),
     ('encode_descriptions',MultiValueCategoricalEncoder('format_description')),
-    ('clean_format_text',FormatTextCleaner())
+    ('clean_format_text',FormatTextCleanReduce())
 ])
 
 api_pipe = Pipeline([
