@@ -53,20 +53,12 @@ def load_high_level_features(high_level_feature_client,extracted_release_ids):
     high_level_feature_dict = {column: [] for column in high_level_feature_columns}
     
     high_level_feature_generator = high_level_feature_client.get_entries()
-    #high_level_feature_generator = pd.read_sql_table("high_level_features",high_level_feature_client.engine,chunksize=20000)
-    #for chunk in tqdm(high_level_feature_generator):
-    #    filtered_chunk = chunk[chunk.release_id.isin(extracted_release_ids)]
-    #    high_level_feature_df = pd.concat([high_level_feature_df,filtered_chunk],axis=0)
-    
     for data in tqdm(high_level_feature_generator):
         if data['release_id'] in extracted_release_ids:
             for x in high_level_feature_dict.keys():
                 high_level_feature_dict[x].append(data[x]) 
 
-
     high_level_feature_df = pd.DataFrame(high_level_feature_dict)
-
-
     high_level_feature_df.reset_index(drop=True,inplace=True)
     high_level_feature_df = high_level_feature_df.astype({'release_id':np.int32,'bitmap':np.int32})
 

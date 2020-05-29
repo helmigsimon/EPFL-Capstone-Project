@@ -1,6 +1,6 @@
 from sklearn.pipeline import Pipeline
 from data.util.paths import DATA_PATH
-from .transformers import (
+from lib.transformers import (
     ColumnRemover,
     Unpickler,
     ColumnCombiner,
@@ -17,22 +17,26 @@ from .transformers import (
     FormatTextCleanReduce,
     TitleSplitter,
     TimePeriodEncoder,
-    OutlierRemover
+    OutlierRemover,
+    ColumnStore,
+    IndicatorConsolidator,
+    ConditionalColumnRemover,
+    ConditionalRowRemover,
 )
 
-#Extracted Data Pipe
+#Extracted Data Pipes
+market_value_pipe = Pipeline([
+    ('make_market_value', ColumnCombiner('median','market_price','market_value')),
+    ('remove_nulls',NullRemover('market_value')),
+    ('remove_outliers', OutlierRemover('market_value')) 
+])
+
 extracted_pipe = Pipeline([
     ('remove_id', ColumnRemover('id')),
     ('unpickle', Unpickler(['track_titles'])),
     ('remove_duplicates', DuplicateRemover('release_id')),
     ('count_standards',StandardCountEncoder('track_titles',DATA_PATH)),
-    ('count_days_since_last_sale',LastSoldEncoder(feature='last_sold',new_feature='days_since_last_sale'))
-])
-
-market_value_pipe = Pipeline([
-    ('make_market_value', ColumnCombiner('median','market_price','market_value')),
-    ('remove_nulls',NullRemover('market_value')),
-    ('remove_outliers', OutlierRemover('market_value')) 
+    ('market_value_pipe', market_value_pipe)
 ])
 
 #API Pipes
@@ -64,4 +68,28 @@ api_pipe = Pipeline([
     ('format_columns', format_pipe),
     ('encode_time_periods', TimePeriodEncoder())
 ])
+
+genres = ['Pop','Rock','Funk / Soul','Latin','Classical','Blues','Electronic','Brass & Military','Hip Hop','Non-Music','Stage & Screen','Childrens','Reggae','Folk, World, & Country']
+
+def make_data_consolidation_pipe(df, column_store):
+    return Pipeline([
+        ('focus_pure_jazz', ConditionalRowRemover(column_store._genre,lambda x: x.sum()==0,axis=1)),
+        ('focus_post_1950', ConditionalRowRemover('year',lambda x: x>1950)),
+        ('drop_null_columns', ConditionalColumnRemover(condition=lambda x: x.sum()>0)),
+        ('style_consolidator', IndicatorConsolidator(
+            output_column='style_Other',
+            columns=column_store._style,
+            threshold=int(0.1*len(df)), 
+        )),
+        ('format_description_consolidator', IndicatorConsolidator(
+            columns=column_store._format_description,
+            output_column='format_description_Other',
+            threshold=int(0.1*len(df)),
+        )),
+        ('format_name_consolidator', IndicatorConsolidator(
+            output_column='format_name_other',
+            columns=column_store._format_name,
+            threshold=5000
+        ))
+    ])
 

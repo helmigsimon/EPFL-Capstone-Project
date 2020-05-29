@@ -13,7 +13,7 @@ class RowRemover(BaseEstimator, TransformerMixin):
     """
     Abstract Base Class for Removing Rows in a DataFrame
     """
-    def __init__(self,features):
+    def __init__(self, features):
         self.features = features
 
     def fit(self,X,y=None):
@@ -26,6 +26,19 @@ class RowRemover(BaseEstimator, TransformerMixin):
         X = X.copy()
 
         return self.remove(X)
+
+class ConditionalRowRemover(RowRemover):
+    """
+    Removes Rows according to a Condition
+    """
+    def __init__(self, features, condition: Callable,**apply_args):
+        super().__init__(features)
+        self.condition = condition
+        self.apply_args = apply_args
+
+    def remove(self, X):
+        return X[X[self.features].progress_apply(self.condition,**self.apply_args)]
+
 
 class NullRemover(RowRemover):
     """
@@ -147,6 +160,40 @@ class ColumnRemover(BaseEstimator,TransformerMixin):
             self.cols_to_remove = list(self.cols_to_remove)
             
         return X.drop(self.cols_to_remove,axis=1)
+
+class ConditionalColumnRemover(BaseEstimator, TransformerMixin):
+    def __init__(self, condition,**kwargs):
+        self.condition = condition
+        self.apply_args = kwargs
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        X = X.copy()
+
+        to_drop = []
+        for column in tqdm(X.columns):
+            try:
+                if not self.condition(X[column]):
+                    to_drop.append(column)
+            except:
+                pass
+
+        return X.drop(to_drop,axis=1)
+
+
+class RemoveZeroIndicators(ConditionalColumnRemover):
+    def __init__(self, **kwargs):
+        super().__init__(self.remove_zero_indicators,**kwargs)
+
+    def remove_zero_indicators(self,x):
+        if not isinstance(x,np.object):
+            try:
+                return x.sum()>0
+            except TypeError:
+                return True
+        return True
 
 class MultiValueCategoricalEncoder(BaseEstimator,TransformerMixin):
     """
@@ -498,7 +545,7 @@ class FormatTextCleanReduce(FeatureCleanReduce):
     """
     Capstone-Specific
     -----------------
-    Implementation of the FeatureCleanReduce for the format_text feature
+    Implementation of FeatureCleanReduce for the format_text feature
     """
     def __init__(self,feature='format_text'):
         super().__init__(feature)
@@ -534,6 +581,7 @@ class TimePeriodEncoder(BaseEstimator, TransformerMixin):
             'big_band': (1930,1950),
             'bebop': (1940,1955),
             'cool': (1950,1970),
+            'fusion': (1970,2020)
         }
     }
     
@@ -746,6 +794,28 @@ class IndicatorCounter(BaseEstimator,TransformerMixin):
     def transform(self,X,y=None):
         X = X.copy()
         X.loc[:,self.counter_name] = self.indicator_counter
+        return X    
+
+
+class IndicatorConsolidator(IndicatorCounter):
+    """
+    Consolidates a given set of indicators into the most important indicators and records the rest in an indicator_counter column
+    """
+    def __init__(self, output_column,columns=None, threshold=None, counter_name=None):
+        super().__init__(columns,counter_name)
+        self.columns = columns
+        self.threshold = threshold
+        self.output_column = output_column
+
+    def fit(self, X, y=None):
+        if (self.counter_name) and (self.counter_name not in self.columns):
+            super().fit(X)
+
+        if not self.columns:
+            self.columns = X.columns        
+
+        if not self.threshold:
+            self.threshold = X[self.columns].sum().median()
 
         self.consolidation_columns = list(filter(lambda x: X[x].sum() < self.threshold,self.columns))        
         return self
@@ -776,6 +846,7 @@ class LastSoldEncoder(BaseEstimator,TransformerMixin):
     def transform(self,X,y=None):
         X = X.copy()
         X.loc[:,self.new_feature] = X.loc[:,self.feature].apply(lambda x: (self.end_date-x).days)
+        assert X.loc[:,self.counter_name].sum() == X.loc[:,self.columns].sum(axis=1).sum()
         return X
         
 class IndicatorReducer(BaseEstimator,TransformerMixin):
@@ -800,3 +871,5 @@ class IndicatorReducer(BaseEstimator,TransformerMixin):
             )
 
         return pd.concat([X, reduced_indicators],axis=1)
+
+
