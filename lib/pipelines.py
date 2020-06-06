@@ -20,8 +20,9 @@ from lib.transformers import (
     OutlierRemover,
     ColumnStore,
     IndicatorConsolidator,
-    ConditionalColumnRemover,
+    ConditionalColumnConsolidator,
     ConditionalRowRemover,
+    DummyGenerator
 )
 
 #Extracted Data Pipes
@@ -55,7 +56,8 @@ format_pipe = Pipeline([
     ('make_columns', FormatEncoder()),
     ('remove_quantity_outliers', OutlierRemover('format_quantity')),
     ('encode_descriptions',MultiValueCategoricalEncoder('format_description')),
-    ('clean_format_text',FormatTextCleanReduce())
+    ('clean_format_text',FormatTextCleanReduce()),
+    ('encode_format_name', DummyGenerator('format_name'))
 ])
 
 api_pipe = Pipeline([
@@ -75,7 +77,7 @@ def make_data_consolidation_pipe(df, column_store):
     return Pipeline([
         ('focus_pure_jazz', ConditionalRowRemover(column_store._genre,lambda x: x.sum()==0,axis=1)),
         ('focus_post_1950', ConditionalRowRemover('year',lambda x: x>1950)),
-        ('drop_null_columns', ConditionalColumnRemover(condition=lambda x: x.sum()>0)),
+        ('drop_null_columns', ConditionalColumnConsolidator(condition=lambda x: x.sum()>0 if x.dtypes==np.uint8 else True)),
         ('style_consolidator', IndicatorConsolidator(
             output_column='style_Other',
             columns=column_store._style,

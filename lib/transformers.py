@@ -86,7 +86,9 @@ class FeatureSplitter(BaseEstimator,TransformerMixin):
 
 class TitleSplitter(FeatureSplitter):
     """
-    Project-Specific Implementation of the FeatureSplitter Base Class for handling the Title Feature
+    Capstone-Specific
+    -----------------
+    Implementation of the FeatureSplitter Base Class for handling the Title Feature
     """
     def __init__(self):
         super().__init__('title',' - ',1,True)
@@ -122,7 +124,9 @@ class ColumnCombiner(BaseEstimator, TransformerMixin):
 
 class RunningTimeImputer(BaseEstimator, TransformerMixin):
     """
-    Project-Specific Implementation of a Transformer which imputes the running_time feature according to the number of tracks listed for each album
+    Capstone-Specific
+    -----------------
+    Implementation of a Transformer which imputes the running_time feature according to the number of tracks listed for each album
     """
     def __init__(self,running_time, number_of_tracks):
         self.running_time = running_time
@@ -147,8 +151,8 @@ class ColumnRemover(BaseEstimator,TransformerMixin):
     """
     Removes unwanted columns from a DataFrame
     """
-    def __init__(self,cols_to_remove):
-        self.cols_to_remove = cols_to_remove
+    def __init__(self,remove_columns):
+        self.remove_columns = remove_columns
     
     def fit(self, X, y=None):
         return self
@@ -156,34 +160,39 @@ class ColumnRemover(BaseEstimator,TransformerMixin):
     def transform(self, X, y=None):
         X = X.copy()
         
-        if type(self.cols_to_remove) == tuple:
-            self.cols_to_remove = list(self.cols_to_remove)
+        if type(self.remove_columns) == tuple:
+            self.remove_columns = list(self.remove_columns)
             
-        return X.drop(self.cols_to_remove,axis=1)
+        return X.drop(self.remove_columns,axis=1)
 
-class ConditionalColumnRemover(BaseEstimator, TransformerMixin):
+class ConditionalColumnConsolidator(ColumnRemover):
+    """
+    Removes columns which do not meet a certain condition from a DataFrame
+    """
     def __init__(self, condition,**kwargs):
+        super().__init__(remove_columns=None)
         self.condition = condition
-        self.apply_args = kwargs
 
     def fit(self, X, y=None):
         return self
 
-    def transform(self, X, y=None):
-        X = X.copy()
-
-        to_drop = []
+    def set_remove_columns(self,X,y=None):
+        self.remove_columns = []
         for column in tqdm(X.columns):
             try:
                 if not self.condition(X[column]):
-                    to_drop.append(column)
+                    self.remove_columns.append(column)
             except:
                 pass
 
-        return X.drop(to_drop,axis=1)
+    def transform(self, X, y=None):
+        self.set_remove_columns(X,y)
+        return super().transform(X,y)
 
-
-class RemoveZeroIndicators(ConditionalColumnRemover):
+class RemoveZeroIndicators(ConditionalColumnConsolidator):
+    """
+    Removes indicator features from DataFrame which sum to zero
+    """
     def __init__(self, **kwargs):
         super().__init__(self.remove_zero_indicators,**kwargs)
 
@@ -194,6 +203,23 @@ class RemoveZeroIndicators(ConditionalColumnRemover):
             except TypeError:
                 return True
         return True
+
+class DummyGenerator(BaseEstimator,TransformerMixin):
+    def __init__(self,feature):
+        self.feature = feature
+
+    def fit(self,X,y=None):
+        return self
+
+    def transform(self, X, y=None):
+        X = X.copy()
+
+        dummies = pd.get_dummies(X.loc[:,self.feature],prefix=self.feature,dtype=np.uint8)
+
+        X = pd.concat([X,dummies],axis=1)
+
+        return X
+
 
 class MultiValueCategoricalEncoder(BaseEstimator,TransformerMixin):
     """
@@ -247,7 +273,9 @@ class Unpickler(BaseEstimator, TransformerMixin):
 
 class GenreEncoder(MultiValueCategoricalEncoder):
     """
-    Project-specific Implementation of the MultiValueCategoricalEncoder for the genre feature
+    Capstone-Specific
+    -----------------
+    Implementation of the MultiValueCategoricalEncoder for the genre feature
     """
     def __init__(self,column='genre'):
         super().__init__(column)
@@ -260,7 +288,9 @@ class GenreEncoder(MultiValueCategoricalEncoder):
 
 class CountryEncoder(BaseEstimator, TransformerMixin):
     """
-    Project-specific Implementation of an encoder for the country feature into country_, region_ and superregion_ dummy variables
+    Capstone-Specific
+    -----------------
+    Implementation of an encoder for the country feature into country_, region_ and superregion_ dummy variables
     """
     def __init__(self,column='country', geoscheme_df=None,country=True,region=True,superregion=True):
         self.column = column
@@ -312,7 +342,11 @@ class CountryEncoder(BaseEstimator, TransformerMixin):
         return pd.concat([X,self.correct_mistaken_encodings(country_encoding)],axis=1)
 
 class StringMatcher:
-
+    """
+    Inspired by the following blogpost: https://bergvca.github.io/2017/10/14/super-fast-string-matching.html
+    --------------
+    Implements TF-IDF N-Gram String Matching
+    """
     def __init__(self,similarity_threshold=0):
         self.similarity_threshold = similarity_threshold
 
@@ -417,6 +451,11 @@ class FeatureCleanReduce(BaseEstimator, TransformerMixin):
         return X  
 
 class LabelCleanReduce(FeatureCleanReduce):
+    """
+    Capstone-Specific
+    -----------------
+    Cleans and reduces the label feature for downstream label encoding
+    """
     def __init__(self,feature='label'):
         super().__init__(feature,2)
         self.multi_value_encoder = MultiValueCategoricalEncoder(feature)
@@ -450,6 +489,11 @@ class LabelCleanReduce(FeatureCleanReduce):
 
 
 class ArtistCleanReduce(FeatureCleanReduce):
+    """
+    Capstone-Specific
+    -----------------
+    Cleans and reduces the artist feature for downstream label encoding
+    """
     def __init__(self,feature='artist'):
         super().__init__(feature)
 
@@ -831,6 +875,11 @@ class IndicatorConsolidator(IndicatorCounter):
         return X.drop(self.consolidation_columns,axis=1)    
 
 class LastSoldEncoder(BaseEstimator,TransformerMixin):
+    """
+    Capstone-Specific
+    -----------------
+    Encodes the last_sold feature of the data
+    """
     def __init__(self,feature,new_feature=None,end_date=None):
         self.feature = feature
         self.end_date = end_date
@@ -850,6 +899,9 @@ class LastSoldEncoder(BaseEstimator,TransformerMixin):
         return X
         
 class IndicatorReducer(BaseEstimator,TransformerMixin):
+    """
+    Reduces a set of indicators using a dimensionality reduction algorithm
+    """
     def __init__(self, indicators, algorithm,components,reduced_column_prefix= 'indicator_reduced'):
         self.indicators = indicators
         self.algorithm = algorithm
