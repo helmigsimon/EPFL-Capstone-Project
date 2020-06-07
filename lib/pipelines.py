@@ -43,7 +43,8 @@ extracted_pipe = Pipeline([
 #API Pipes
 clean_text_pipe = Pipeline([
     ('label', LabelCleanReduce()),
-    ('artist', ArtistCleanReduce())
+    ('artist', ArtistCleanReduce()),
+    ('artist_null_imputer', SimpleImputer(strategy='constant',value='Unknown'))
 ])
 
 column_encoding_pipe = Pipeline([
@@ -92,6 +93,7 @@ def make_data_consolidation_pipe(df, column_store):
             output_column='format_name_other',
             columns=column_store._format_name,
             threshold=5000
-        ))
+        )),
+        ()
     ])
 
