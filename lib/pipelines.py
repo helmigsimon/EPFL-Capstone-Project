@@ -44,7 +44,6 @@ extracted_pipe = Pipeline([
 clean_text_pipe = Pipeline([
     ('label', LabelCleanReduce()),
     ('artist', ArtistCleanReduce()),
-    ('artist_null_imputer', SimpleImputer(strategy='constant',value='Unknown'))
 ])
 
 column_encoding_pipe = Pipeline([
@@ -55,10 +54,10 @@ column_encoding_pipe = Pipeline([
 
 format_pipe = Pipeline([
     ('make_columns', FormatEncoder()),
+    ('encode_format_name', DummyGenerator('format_name')),
     ('remove_quantity_outliers', OutlierRemover('format_quantity')),
     ('encode_descriptions',MultiValueCategoricalEncoder('format_description')),
-    ('clean_format_text',FormatTextCleanReduce()),
-    ('encode_format_name', DummyGenerator('format_name'))
+    ('clean_format_text',FormatTextCleanReduce())
 ])
 
 api_pipe = Pipeline([
