@@ -92,7 +92,6 @@ def make_data_consolidation_pipe(df, column_store):
             output_column='format_name_other',
             columns=column_store._format_name,
             threshold=5000
-        )),
-        ()
+        ))
     ])
 

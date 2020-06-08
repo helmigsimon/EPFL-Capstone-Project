@@ -37,7 +37,7 @@ class ConditionalRowRemover(RowRemover):
         self.apply_args = apply_args
 
     def remove(self, X):
-        return X[X[self.features].progress_apply(self.condition,**self.apply_args)]
+        return X[X[self.features].apply(self.condition,**self.apply_args)]
 
 
 class NullRemover(RowRemover):
