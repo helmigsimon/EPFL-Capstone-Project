@@ -64,10 +64,10 @@ api_pipe = Pipeline([
     ('remove_columns', ColumnRemover('id')),
     ('split_title', TitleSplitter()),
     ('unpickle', Unpickler(['genre','style','label','formats'])),
+    ('format_columns', format_pipe),
     ('clean_text',clean_text_pipe),
     ('remove_duplicates', DuplicateRemover('release_id')),
     ('encode_columns',column_encoding_pipe),
-    ('format_columns', format_pipe),
     ('encode_time_periods', TimePeriodEncoder())
 ])
 
